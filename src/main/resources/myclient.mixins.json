@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "mcp.client.hud",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [
+    "HudOverlay"
+  ],
+  "client": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

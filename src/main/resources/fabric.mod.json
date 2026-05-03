@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "appetir",
+  "version": "1.0",
+  "name": "Appetir Client",
+  "description": "Custom Minecraft client",
+  "authors": ["Appatia"],
+  "entrypoints": {
+    "client": [
+      "com.appetir.AppetirClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.14.0",
+    "minecraft": "1.16.5"
+  }
+}
