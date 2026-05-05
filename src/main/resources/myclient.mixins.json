@@ -1,9 +1,27 @@
 {
   "required": true,
-  "package": "mcp.client.hud",
+  "package": "com.appetir.mixin",
   "compatibilityLevel": "JAVA_8",
   "mixins": [
-    "HudOverlay"
+    "HudOverlay",
+    "ClientTickMixin",
+    "KeyboardMixin",
+    "AutoAcceptMixin",
+    "AspectRatioMixin",
+    "CosmeticsMixin",
+    "CustomHandMixin",
+    "GlassHandsMixin",
+    "HitBoxMixin",
+    "InvMoveMixin",
+    "ItemPhysicMixin",
+    "NameTagsMixin",
+    "NoDelayMixin",
+    "NoFriendDamageMixin",
+    "NoPushMixin",
+    "NoRenderMixin",
+    "NoSlowMixin",
+    "SpiderMixin",
+    "WorldRendererMixin"
   ],
   "client": [],
   "injectors": {
