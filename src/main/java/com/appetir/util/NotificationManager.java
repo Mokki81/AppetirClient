@@ -9,15 +9,16 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * On-screen notifications (module toggle, etc.).
+ * Premium slide-in notifications.
  */
 public class NotificationManager {
 
     private static final List<Notification> notifications = new ArrayList<>();
+    private static final long DURATION = 2800;
 
     public static void push(String title, String message) {
         notifications.add(0, new Notification(title, message, System.currentTimeMillis()));
-        if (notifications.size() > 8) {
+        while (notifications.size() > 6) {
             notifications.remove(notifications.size() - 1);
         }
     }
@@ -31,41 +32,65 @@ public class NotificationManager {
         if (mc == null) return;
 
         long now = System.currentTimeMillis();
-        int y = mc.getWindow().getScaledHeight() / 2 - 40;
         int screenW = mc.getWindow().getScaledWidth();
+        int screenH = mc.getWindow().getScaledHeight();
+        int y = screenH / 2 - 50;
         int accent = ThemeManager.getAccentColor();
 
         Iterator<Notification> it = notifications.iterator();
         while (it.hasNext()) {
             Notification n = it.next();
             long age = now - n.time;
-            if (age > 2500) {
+            if (age > DURATION) {
                 it.remove();
                 continue;
             }
 
-            float alpha = age < 200 ? age / 200f : (age > 2200 ? (2500 - age) / 300f : 1f);
-            alpha = Math.max(0f, Math.min(1f, alpha));
+            // ease in / out
+            float alpha;
+            float slide;
+            if (age < 250) {
+                float t = age / 250f;
+                alpha = t;
+                slide = 1f - t * t; // from right
+            } else if (age > DURATION - 350) {
+                float t = (DURATION - age) / 350f;
+                alpha = t;
+                slide = 0f;
+            } else {
+                alpha = 1f;
+                slide = 0f;
+            }
 
-            int a = (int) (alpha * 220);
-            int bg = (a << 24) | 0x000000;
-            int textA = (int) (alpha * 255);
+            int aBg = (int) (alpha * 200);
+            int aText = (int) (alpha * 255);
 
             String line1 = n.title;
             String line2 = n.message;
-            int w = Math.max(mc.textRenderer.getWidth(line1), mc.textRenderer.getWidth(line2)) + 16;
-            int x = screenW - w - 8;
+            int w = Math.max(mc.textRenderer.getWidth(line1), mc.textRenderer.getWidth(line2)) + 20;
+            w = Math.max(w, 100);
+            int h = 32;
+            int x = (int) (screenW - w - 10 + slide * 40);
 
-            // background
-            fill(matrices, x, y, x + w, y + 28, bg);
-            // accent bar
-            fill(matrices, x, y, x + 2, y + 28, (textA << 24) | (accent & 0x00FFFFFF));
+            // shadow
+            fill(matrices, x + 2, y + 2, x + w + 2, y + h + 2, (aBg / 3) << 24);
+            // body
+            fill(matrices, x, y, x + w, y + h, (aBg << 24));
+            // left accent bar
+            fill(matrices, x, y, x + 3, y + h, (aText << 24) | (accent & 0x00FFFFFF));
+            // top subtle line
+            fill(matrices, x + 3, y, x + w, y + 1, ThemeManager.withAlpha(accent, alpha * 0.35f));
 
-            mc.textRenderer.drawWithShadow(matrices, line1, x + 8, y + 5, (textA << 24) | 0xFFFFFF);
-            mc.textRenderer.drawWithShadow(matrices, line2, x + 8, y + 15,
-                    (textA << 24) | (line2.equals("Enabled") ? 0x55FF55 : 0xFF5555));
+            // progress bar at bottom
+            float progress = 1f - (age / (float) DURATION);
+            int progW = (int) ((w - 3) * progress);
+            fill(matrices, x + 3, y + h - 2, x + 3 + progW, y + h, ThemeManager.withAlpha(accent, alpha * 0.8f));
 
-            y += 32;
+            mc.textRenderer.drawWithShadow(matrices, line1, x + 10, y + 6, (aText << 24) | 0xFFFFFF);
+            int msgColor = line2.equals("Enabled") ? 0x55FF88 : 0xFF6B6B;
+            mc.textRenderer.drawWithShadow(matrices, line2, x + 10, y + 17, (aText << 24) | msgColor);
+
+            y += h + 6;
         }
     }
 
@@ -76,7 +101,6 @@ public class NotificationManager {
     private static class Notification {
         final String title, message;
         final long time;
-
         Notification(String title, String message, long time) {
             this.title = title;
             this.message = message;

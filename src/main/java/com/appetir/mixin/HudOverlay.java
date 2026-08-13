@@ -25,7 +25,6 @@ public class HudOverlay {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.options.debugEnabled) return;
 
-        // Always render notifications
         NotificationManager.render(matrices);
 
         if (!AppetirClient.hudVisible) return;
@@ -34,31 +33,50 @@ public class HudOverlay {
         if (mm == null) return;
 
         int accent = ThemeManager.getAccentColor();
+        int accentDim = ThemeManager.getAccentColor(0.45f);
 
-        // Watermark
-        String watermark = AppetirClient.NAME + " §7v" + AppetirClient.VERSION;
-        mc.textRenderer.drawWithShadow(matrices, watermark, 4, 4, accent);
+        // ── Premium watermark ────────────────────────────────────
+        String name = AppetirClient.NAME;
+        String ver = " v" + AppetirClient.VERSION;
+        mc.textRenderer.drawWithShadow(matrices, name, 5, 5, accent);
+        mc.textRenderer.drawWithShadow(matrices, ver, 5 + mc.textRenderer.getWidth(name), 5, 0xFF888899);
 
+        // thin accent underline under watermark
+        int uw = mc.textRenderer.getWidth(name + ver);
+        fill(matrices, 5, 15, 5 + uw, 16, accentDim);
+
+        // FPS line
         String fps = mc.fpsDebugString.split(" ")[0] + " fps";
-        mc.textRenderer.drawWithShadow(matrices, fps, 4, 15, 0xFFAAAAAA);
+        mc.textRenderer.drawWithShadow(matrices, fps, 5, 18, 0xFF777788);
 
-        // Arraylist
+        // ── Arraylist ────────────────────────────────────────────
         List<Module> enabled = mm.getEnabled().stream()
                 .sorted(Comparator.comparingInt((Module m) -> -mc.textRenderer.getWidth(m.getName())))
                 .collect(Collectors.toList());
 
         int screenW = mc.getWindow().getScaledWidth();
         int y = 4;
+        int i = 0;
 
         for (Module mod : enabled) {
             String text = mod.getName();
             int width = mc.textRenderer.getWidth(text);
-            int x = screenW - width - 6;
+            int x = screenW - width - 8;
 
-            fill(matrices, x - 3, y - 1, screenW - 2, y + 10, 0x66000000);
-            fill(matrices, screenW - 2, y - 1, screenW, y + 10, accent);
-            mc.textRenderer.drawWithShadow(matrices, text, x, y, 0xFFFFFFFF);
-            y += 11;
+            // soft background plate
+            fill(matrices, x - 5, y - 1, screenW - 1, y + 11, 0x99000000);
+
+            // gradient-ish right bar (accent)
+            float t = enabled.size() <= 1 ? 0f : (float) i / (enabled.size() - 1);
+            int barColor = ThemeManager.lerpColor(accent, ThemeManager.secondary(), t * 0.6f);
+            fill(matrices, screenW - 2, y - 1, screenW, y + 11, barColor);
+
+            // left micro accent
+            fill(matrices, x - 5, y - 1, x - 4, y + 11, ThemeManager.withAlpha(barColor, 0.7f));
+
+            mc.textRenderer.drawWithShadow(matrices, text, x, y + 1, 0xFFFFFFFF);
+            y += 12;
+            i++;
         }
     }
 
