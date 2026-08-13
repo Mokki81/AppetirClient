@@ -1,21 +1,16 @@
 {
   "schemaVersion": 1,
   "id": "appetir",
-  "version": "1.3",
+  "version": "1.4",
   "name": "Appetir Client",
-  "description": "Custom Minecraft client — modules, settings, config, alts, friends, modern GUI",
+  "description": "Premium Minecraft client — modules, settings, config, alts, friends, modern GUI",
   "authors": ["Appatia", "Grok"],
-  "contact": {},
   "license": "All Rights Reserved",
   "environment": "client",
   "entrypoints": {
-    "client": [
-      "com.appetir.AppetirClient"
-    ]
+    "client": ["com.appetir.AppetirClient"]
   },
-  "mixins": [
-    "myclient.mixins.json"
-  ],
+  "mixins": ["myclient.mixins.json"],
   "depends": {
     "fabricloader": ">=0.14.0",
     "minecraft": "1.16.5"
