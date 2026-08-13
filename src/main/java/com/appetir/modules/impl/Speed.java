@@ -21,42 +21,39 @@ public class Speed extends Module {
     public void onTick() {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.player.isFallFlying() || mc.player.isTouchingWater()) return;
-
         if (!isMoving(mc)) return;
 
         double s = speed.get();
+        String m = mode.get();
 
-        switch (mode.get()) {
-            case "Vanilla":
-                mc.player.abilities.setWalkSpeed((float) (0.1f * s));
-                break;
-            case "BHop":
-                if (mc.player.isOnGround()) {
-                    mc.player.jump();
-                }
-                // fallthrough intentional-ish for strafe boost
-            case "Strafe":
-default:
-                Vec3d v = mc.player.getVelocity();
-                float yaw = mc.player.yaw * 0.017453292f;
-                double forward = mc.player.input.movementForward;
-                double strafe = mc.player.input.movementSideways;
-
-                if (forward == 0 && strafe == 0) return;
-
-                if (forward != 0) {
-                    if (strafe > 0) yaw += (forward > 0 ? -45 : 45);
-                    else if (strafe < 0) yaw += (forward > 0 ? 45 : -45);
-                    strafe = 0;
-                    forward = forward > 0 ? 1 : -1;
-                }
-
-                double mx = forward * s * 0.28 * -Math.sin(yaw) + strafe * s * 0.28 * Math.cos(yaw);
-                double mz = forward * s * 0.28 * Math.cos(yaw) + strafe * s * 0.28 * Math.sin(yaw);
-
-                mc.player.setVelocity(mx, v.y, mz);
-                break;
+        if (m.equals("Vanilla")) {
+            mc.player.abilities.setWalkSpeed((float) (0.1f * s));
+            return;
         }
+
+        if (m.equals("BHop") && mc.player.isOnGround()) {
+            mc.player.jump();
+        }
+
+        // Strafe / BHop boost
+        Vec3d v = mc.player.getVelocity();
+        float yaw = mc.player.yaw * 0.017453292f;
+        double forward = mc.player.input.movementForward;
+        double strafe = mc.player.input.movementSideways;
+
+        if (forward == 0 && strafe == 0) return;
+
+        if (forward != 0) {
+            if (strafe > 0) yaw += (forward > 0 ? -45 : 45) * 0.017453292f;
+            else if (strafe < 0) yaw += (forward > 0 ? 45 : -45) * 0.017453292f;
+            strafe = 0;
+            forward = forward > 0 ? 1 : -1;
+        }
+
+        double mx = forward * s * 0.28 * -Math.sin(yaw) + strafe * s * 0.28 * Math.cos(yaw);
+        double mz = forward * s * 0.28 * Math.cos(yaw) + strafe * s * 0.28 * Math.sin(yaw);
+
+        mc.player.setVelocity(mx, v.y, mz);
     }
 
     @Override

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "id": "appetir",
-  "version": "1.2",
+  "version": "1.3",
   "name": "Appetir Client",
-  "description": "Custom Minecraft client with modules, modern GUI, offline Alt Manager and config system",
+  "description": "Custom Minecraft client — modules, settings, config, alts, friends, modern GUI",
   "authors": ["Appatia", "Grok"],
   "contact": {},
   "license": "All Rights Reserved",

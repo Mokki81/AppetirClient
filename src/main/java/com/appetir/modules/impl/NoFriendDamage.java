@@ -1,20 +1,24 @@
 package com.appetir.modules.impl;
 
+import com.appetir.friends.FriendManager;
 import com.appetir.modules.Module;
-import java.util.HashSet;
-import java.util.Set;
+import com.appetir.settings.BooleanSetting;
 
-// NoFriendDamage блокирует атаки по игрокам из whitelist.
-// Реализуется через mixin на ClientPlayerInteractionManager#attackEntity
 public class NoFriendDamage extends Module {
 
-    public static final Set<String> friends = new HashSet<>();
+    private final BooleanSetting attack = new BooleanSetting("BlockAttack", "Cancel attacks on friends", true);
 
     public NoFriendDamage() {
-        super("NoFriendDamage", "Блокирует атаки по друзьям", Category.COMBAT);
+        super("NoFriendDamage", "Не даёт бить друзей", Category.COMBAT);
+        addSetting(attack);
     }
 
-    public static void addFriend(String name)    { friends.add(name.toLowerCase()); }
-    public static void removeFriend(String name) { friends.remove(name.toLowerCase()); }
-    public static boolean isFriend(String name)  { return friends.contains(name.toLowerCase()); }
+    public boolean shouldBlock() {
+        return isEnabled() && attack.get();
+    }
+
+    public boolean isFriend(String name) {
+        FriendManager fm = FriendManager.getInstance();
+        return fm != null && fm.isFriend(name);
+    }
 }
