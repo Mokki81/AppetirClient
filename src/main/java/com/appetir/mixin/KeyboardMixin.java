@@ -1,6 +1,7 @@
 package com.appetir.mixin;
 
 import com.appetir.AppetirClient;
+import com.appetir.config.ConfigManager;
 import com.appetir.gui.AltManagerScreen;
 import com.appetir.gui.ClickGUI;
 import com.appetir.modules.ModuleManager;
@@ -44,6 +45,8 @@ public class KeyboardMixin {
         // Right Alt — toggle HUD visibility
         if (key == GLFW.GLFW_KEY_RIGHT_ALT) {
             AppetirClient.hudVisible = !AppetirClient.hudVisible;
+            ConfigManager cm = ConfigManager.getInstance();
+            if (cm != null) cm.saveQuiet();
             return;
         }
 
