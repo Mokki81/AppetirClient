@@ -1,5 +1,7 @@
 package com.appetir.modules;
 
+import com.appetir.config.ConfigManager;
+
 /**
  * Base class for all client modules.
  * Clean, simple and extensible.
@@ -37,6 +39,12 @@ public abstract class Module {
             System.err.println("[Appetir] Error in module " + name + ": " + e.getMessage());
             e.printStackTrace();
         }
+
+        // Auto-save config when state changes
+        ConfigManager cm = ConfigManager.getInstance();
+        if (cm != null) {
+            cm.saveQuiet();
+        }
     }
 
     public boolean isEnabled() { return enabled; }
@@ -44,7 +52,12 @@ public abstract class Module {
     public String getDescription() { return description; }
     public Category getCategory() { return category; }
     public int getKey() { return key; }
-    public void setKey(int key) { this.key = key; }
+
+    public void setKey(int key) {
+        this.key = key;
+        ConfigManager cm = ConfigManager.getInstance();
+        if (cm != null) cm.saveQuiet();
+    }
 
     public enum Category {
         COMBAT("Combat"),

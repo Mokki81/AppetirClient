@@ -1,5 +1,7 @@
 package com.appetir.gui;
 
+import com.appetir.config.ConfigManager;
+
 /**
  * Theme system with animated gradient support.
  */
@@ -35,7 +37,11 @@ public class ThemeManager {
     }
 
     public static void setCurrent(Theme t) {
-        if (t != null) current = t;
+        if (t != null && t != current) {
+            current = t;
+            ConfigManager cm = ConfigManager.getInstance();
+            if (cm != null) cm.saveQuiet();
+        }
     }
 
     public static int primary() {
@@ -46,15 +52,10 @@ public class ThemeManager {
         return current.colorSecondary;
     }
 
-    /**
-     * Returns the current accent color.
-     * For GRADIENT theme — smoothly animates between primary and secondary.
-     */
     public static int getAccentColor() {
         if (current == Theme.GRADIENT) {
             long time = System.currentTimeMillis();
             float t = (time % 4000L) / 4000.0f;
-            // smooth triangle wave
             float wave = t < 0.5f ? t * 2f : 2f - t * 2f;
             return lerpColor(Theme.GRADIENT.colorPrimary, Theme.GRADIENT.colorSecondary, wave);
         }
