@@ -1,15 +1,21 @@
 {
   "schemaVersion": 1,
   "id": "appetir",
-  "version": "1.0",
+  "version": "1.1",
   "name": "Appetir Client",
-  "description": "Custom Minecraft client",
-  "authors": ["Appatia"],
+  "description": "Custom Minecraft client with modules, modern GUI and offline Alt Manager",
+  "authors": ["Appatia", "Grok"],
+  "contact": {},
+  "license": "All Rights Reserved",
+  "environment": "client",
   "entrypoints": {
     "client": [
       "com.appetir.AppetirClient"
     ]
   },
+  "mixins": [
+    "myclient.mixins.json"
+  ],
   "depends": {
     "fabricloader": ">=0.14.0",
     "minecraft": "1.16.5"
