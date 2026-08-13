@@ -1,6 +1,7 @@
 package com.appetir.mixin;
 
 import com.appetir.AppetirClient;
+import com.appetir.gui.ThemeManager;
 import com.appetir.modules.Module;
 import com.appetir.modules.ModuleManager;
 import net.minecraft.client.MinecraftClient;
@@ -11,7 +12,9 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Mixin(InGameHud.class)
 public class HudOverlay {
@@ -19,25 +22,48 @@ public class HudOverlay {
     @Inject(method = "render", at = @At("TAIL"))
     private void onRender(MatrixStack matrices, float tickDelta, CallbackInfo ci) {
         if (!AppetirClient.hudVisible) return;
+
         MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.options.debugEnabled) return; // don't overlap F3
+
         ModuleManager mm = ModuleManager.getInstance();
         if (mm == null) return;
 
-        // Заголовок клиента
-        mc.textRenderer.drawWithShadow(matrices,
-                AppetirClient.NAME + " " + AppetirClient.VERSION,
-                4, 4, 0xFF55FFFF);
+        int accent = ThemeManager.getAccentColor();
 
-        // Список активных модулей справа
-        List<Module> modules = mm.getModules();
-        int y = 4;
+        // ── Watermark (top-left) ─────────────────────────────────
+        String watermark = AppetirClient.NAME + " §7v" + AppetirClient.VERSION;
+        mc.textRenderer.drawWithShadow(matrices, watermark, 4, 4, accent);
+
+        // FPS
+        String fps = mc.fpsDebugString.split(" ")[0] + " fps";
+        mc.textRenderer.drawWithShadow(matrices, fps, 4, 15, 0xFFAAAAAA);
+
+        // ── Arraylist (top-right) ────────────────────────────────
+        List<Module> enabled = mm.getEnabled().stream()
+                .sorted(Comparator.comparingInt((Module m) -> -mc.textRenderer.getWidth(m.getName())))
+                .collect(Collectors.toList());
+
         int screenW = mc.getWindow().getScaledWidth();
-        for (Module mod : modules) {
-            if (!mod.isEnabled()) continue;
+        int y = 4;
+
+        for (Module mod : enabled) {
             String text = mod.getName();
-            int x = screenW - mc.textRenderer.getWidth(text) - 4;
-            mc.textRenderer.drawWithShadow(matrices, text, x, y, 0xFFFFFF55);
-            y += 10;
+            int width = mc.textRenderer.getWidth(text);
+            int x = screenW - width - 6;
+
+            // subtle background
+            fill(matrices, x - 3, y - 1, screenW - 2, y + 10, 0x66000000);
+            // accent bar on the right
+            fill(matrices, screenW - 2, y - 1, screenW, y + 10, accent);
+
+            mc.textRenderer.drawWithShadow(matrices, text, x, y, 0xFFFFFFFF);
+            y += 11;
         }
+    }
+
+    // local helper (InGameHud already has fill via DrawableHelper)
+    private void fill(MatrixStack m, int x1, int y1, int x2, int y2, int color) {
+        net.minecraft.client.gui.DrawableHelper.fill(m, x1, y1, x2, y2, color);
     }
 }

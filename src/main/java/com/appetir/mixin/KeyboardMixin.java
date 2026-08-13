@@ -1,6 +1,7 @@
 package com.appetir.mixin;
 
 import com.appetir.AppetirClient;
+import com.appetir.gui.AltManagerScreen;
 import com.appetir.gui.ClickGUI;
 import com.appetir.modules.ModuleManager;
 import net.minecraft.client.Keyboard;
@@ -18,19 +19,38 @@ public class KeyboardMixin {
     private void onKey(long window, int key, int scancode, int action, int modifiers, CallbackInfo ci) {
         if (action != GLFW.GLFW_PRESS) return;
 
-        // Right Shift — открыть ClickGUI (как на скрине)
+        MinecraftClient mc = MinecraftClient.getInstance();
+
+        // Right Shift — open / close ClickGUI
         if (key == GLFW.GLFW_KEY_RIGHT_SHIFT) {
-            MinecraftClient.getInstance().setScreen(new ClickGUI());
+            if (mc.currentScreen instanceof ClickGUI) {
+                mc.setScreen(null);
+            } else if (mc.currentScreen == null) {
+                mc.setScreen(new ClickGUI());
+            }
             return;
         }
 
-        // Right Alt — переключить HUD
+        // Right Control — open Alt Manager
+        if (key == GLFW.GLFW_KEY_RIGHT_CONTROL) {
+            if (mc.currentScreen instanceof AltManagerScreen) {
+                mc.setScreen(null);
+            } else {
+                mc.setScreen(new AltManagerScreen(mc.currentScreen));
+            }
+            return;
+        }
+
+        // Right Alt — toggle HUD visibility
         if (key == GLFW.GLFW_KEY_RIGHT_ALT) {
             AppetirClient.hudVisible = !AppetirClient.hudVisible;
             return;
         }
 
-        ModuleManager mm = ModuleManager.getInstance();
-        if (mm != null) mm.onKeyPress(key);
+        // Module keybinds (only when no screen is open)
+        if (mc.currentScreen == null) {
+            ModuleManager mm = ModuleManager.getInstance();
+            if (mm != null) mm.onKeyPress(key);
+        }
     }
 }
