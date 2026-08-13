@@ -1,10 +1,15 @@
 package com.appetir.modules;
 
 import com.appetir.config.ConfigManager;
+import com.appetir.settings.Setting;
+import com.appetir.util.NotificationManager;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Base class for all client modules.
- * Clean, simple and extensible.
  */
 public abstract class Module {
 
@@ -13,12 +18,25 @@ public abstract class Module {
     private final Category category;
     private boolean enabled;
     private int key = -1;
+    private final List<Setting> settings = new ArrayList<>();
 
     public Module(String name, String description, Category category) {
         this.name = name;
         this.description = description;
         this.category = category;
         this.enabled = false;
+    }
+
+    protected void addSetting(Setting setting) {
+        settings.add(setting);
+    }
+
+    public List<Setting> getSettings() {
+        return Collections.unmodifiableList(settings);
+    }
+
+    public boolean hasSettings() {
+        return !settings.isEmpty();
     }
 
     public void onEnable() {}
@@ -35,16 +53,14 @@ public abstract class Module {
         try {
             if (value) onEnable();
             else onDisable();
+            NotificationManager.pushModule(name, value);
         } catch (Exception e) {
             System.err.println("[Appetir] Error in module " + name + ": " + e.getMessage());
             e.printStackTrace();
         }
 
-        // Auto-save config when state changes
         ConfigManager cm = ConfigManager.getInstance();
-        if (cm != null) {
-            cm.saveQuiet();
-        }
+        if (cm != null) cm.saveQuiet();
     }
 
     public boolean isEnabled() { return enabled; }
