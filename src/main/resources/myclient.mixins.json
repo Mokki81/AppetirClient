@@ -6,6 +6,7 @@
     "HudOverlay",
     "ClientTickMixin",
     "KeyboardMixin",
+    "MouseMixin",
     "AutoAcceptMixin",
     "AspectRatioMixin",
     "CosmeticsMixin",

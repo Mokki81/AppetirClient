@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "id": "appetir",
-  "version": "1.5",
+  "version": "1.6",
   "name": "Appetir Client",
-  "description": "Premium Minecraft client — modules with settings, config, alts, friends, modern GUI",
+  "description": "Premium Minecraft client — keybinds, keystrokes, modules, config, alts",
   "authors": ["Appatia", "Grok"],
   "license": "All Rights Reserved",
   "environment": "client",

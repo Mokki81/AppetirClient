@@ -8,6 +8,8 @@ import com.appetir.settings.BooleanSetting;
 import com.appetir.settings.ModeSetting;
 import com.appetir.settings.NumberSetting;
 import com.appetir.settings.Setting;
+import com.appetir.util.BindManager;
+import com.appetir.util.KeyUtil;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.text.LiteralText;
@@ -18,7 +20,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Premium ClickGUI — glass panels, glow accents, expandable settings.
+ * Premium ClickGUI with Neverlose-style keybinds.
+ * LMB — toggle | RMB — expand settings+bind
  */
 public class ClickGUI extends Screen {
 
@@ -49,28 +52,20 @@ public class ClickGUI extends Screen {
         int accentLine = ThemeManager.getAccentColor(0.55f);
         int sideH = H - TOP * 2;
 
-        // Deep dim
         fill(m, 0, 0, this.width, H, 0xD0000008);
 
         int sx = TOP;
         int px = sx + SIDEBAR_W + GAP;
 
-        // ════════ SIDEBAR ════════
-        // outer glow
         fill(m, sx - 1, TOP - 1, sx + SIDEBAR_W + 1, TOP + sideH + 1, accentSoft);
-        // body
         fill(m, sx, TOP, sx + SIDEBAR_W, TOP + sideH, 0xF50A0A14);
-        // top accent line
         fill(m, sx, TOP, sx + SIDEBAR_W, TOP + 2, accentLine);
 
-        // Brand block
         fill(m, sx, TOP + 2, sx + SIDEBAR_W, TOP + 44, 0xF0080812);
         drawCenteredString(m, textRenderer, AppetirClient.NAME, sx + SIDEBAR_W / 2, TOP + 12, accent);
         drawCenteredString(m, textRenderer, "v" + AppetirClient.VERSION, sx + SIDEBAR_W / 2, TOP + 24, 0xFF6A6A7A);
-        // brand underline
         fill(m, sx + 20, TOP + 38, sx + SIDEBAR_W - 20, TOP + 39, accentSoft);
 
-        // Search
         int sy = TOP + 50;
         boolean searchHov = hovered(mx, my, sx + 6, sy, sx + SIDEBAR_W - 6, sy + 16);
         fill(m, sx + 6, sy, sx + SIDEBAR_W - 6, sy + 16, searchFocused ? 0xFF141428 : 0xFF0C0C18);
@@ -78,7 +73,6 @@ public class ClickGUI extends Screen {
         String sd = search.isEmpty() ? (searchFocused ? "|" : "Search modules") : search + (searchFocused ? "|" : "");
         drawString(m, textRenderer, sd, sx + 10, sy + 4, search.isEmpty() ? 0xFF4A4A5A : 0xFFE8E8F0);
 
-        // Categories
         int cy = sy + 24;
         for (Module.Category cat : Module.Category.values()) {
             boolean sel = cat == selected && !showTheme;
@@ -90,20 +84,21 @@ public class ClickGUI extends Screen {
         cy += CAT_H;
         drawCat(m, "Alts", cy, false, hovered(mx, my, sx, cy, sx + SIDEBAR_W, cy + CAT_H), accent);
 
-        // Sidebar footer
         drawCenteredString(m, textRenderer, "RShift", sx + SIDEBAR_W / 2, TOP + sideH - 14, 0xFF3A3A4A);
 
-        // ════════ MAIN PANEL ════════
         fill(m, px - 1, TOP - 1, px + PANEL_W + 1, TOP + sideH + 1, accentSoft);
         fill(m, px, TOP, px + PANEL_W, TOP + sideH, 0xF50C0C18);
         fill(m, px, TOP, px + PANEL_W, TOP + 2, accentLine);
 
-        // Header bar
         fill(m, px, TOP + 2, px + PANEL_W, TOP + 24, 0xF00A0A14);
         String header = showTheme ? "Themes" : (search.isEmpty() ? selected.displayName : "Search results");
         drawString(m, textRenderer, header, px + 12, TOP + 9, accent);
-        if (!showTheme) {
-            drawString(m, textRenderer, "RMB settings", px + PANEL_W - 78, TOP + 9, 0xFF4A4A5A);
+
+        if (BindManager.isListening()) {
+            drawString(m, textRenderer, "Press a key...  DEL=unbind  ESC=cancel",
+                    px + 12, TOP + sideH - 14, accent);
+        } else if (!showTheme) {
+            drawString(m, textRenderer, "RMB — settings & bind", px + PANEL_W - 118, TOP + 9, 0xFF4A4A5A);
         }
 
         if (showTheme) renderThemes(m, mx, my, px, accent);
@@ -117,7 +112,6 @@ public class ClickGUI extends Screen {
         if (sel) {
             fill(m, sx, y, sx + SIDEBAR_W, y + CAT_H, 0x285B8CFF);
             fill(m, sx, y + 4, sx + 3, y + CAT_H - 4, accent);
-            // soft right fade
             fill(m, sx + SIDEBAR_W - 8, y, sx + SIDEBAR_W, y + CAT_H, 0x155B8CFF);
         } else if (hov) {
             fill(m, sx, y, sx + SIDEBAR_W, y + CAT_H, 0x14FFFFFF);
@@ -138,43 +132,52 @@ public class ClickGUI extends Screen {
 
             boolean open = expanded.contains(mod.getName());
             boolean hov = hovered(mx, my, px + 4, y, px + PANEL_W - 4, y + ROW_H);
+            boolean listening = BindManager.isListening() && BindManager.getListening() == mod;
 
-            // row background
-            if (mod.isEnabled()) {
-                fill(m, px + 4, y, px + PANEL_W - 4, y + ROW_H, 0x18FFFFFF);
-            } else if (hov) {
-                fill(m, px + 4, y, px + PANEL_W - 4, y + ROW_H, 0x10FFFFFF);
-            }
+            if (mod.isEnabled()) fill(m, px + 4, y, px + PANEL_W - 4, y + ROW_H, 0x18FFFFFF);
+            else if (hov) fill(m, px + 4, y, px + PANEL_W - 4, y + ROW_H, 0x10FFFFFF);
 
-            // left enable indicator
-            if (mod.isEnabled()) {
-                fill(m, px + 4, y + 6, px + 6, y + ROW_H - 6, accent);
-            }
+            if (mod.isEnabled()) fill(m, px + 4, y + 6, px + 6, y + ROW_H - 6, accent);
 
-            // name
-            String arrow = mod.hasSettings() ? (open ? "  ·" : "  ·") : "";
             int nameCol = mod.isEnabled() ? 0xFFFFFFFF : 0xFF9A9AAA;
-            drawString(m, textRenderer, mod.getName() + arrow, px + 14, y + 7, nameCol);
+            drawString(m, textRenderer, mod.getName(), px + 14, y + 7, nameCol);
 
-            // desc
+            // keybind badge on row
+            String keyName = listening ? "..." : KeyUtil.getKeyName(mod.getKey());
+            if (!keyName.equals("NONE") || listening) {
+                int kw = textRenderer.getWidth(keyName);
+                fill(m, px + PANEL_W - 48 - kw, y + 6, px + PANEL_W - 44, y + 16,
+                        listening ? ThemeManager.withAlpha(accent, 0.5f) : 0x33FFFFFF);
+                drawString(m, textRenderer, keyName, px + PANEL_W - 46 - kw, y + 7,
+                        listening ? accent : 0xFF888899);
+            }
+
             String desc = mod.getDescription();
-            if (desc.length() > 30) desc = desc.substring(0, 28) + "..";
+            if (desc.length() > 28) desc = desc.substring(0, 26) + "..";
             drawString(m, textRenderer, desc, px + 14, y + 20, 0xFF4A4A5A);
 
-            // settings badge
-            if (mod.hasSettings()) {
-                String badge = open ? "−" : "+";
-                drawString(m, textRenderer, badge, px + PANEL_W - 52, y + 12, open ? accent : 0xFF5A5A6A);
-            }
-
-            // toggle
+            drawString(m, textRenderer, open ? "−" : "+", px + PANEL_W - 52, y + 12, open ? accent : 0xFF5A5A6A);
             drawToggle(m, px + PANEL_W - 40, y + 13, mod.isEnabled(), accent);
 
             y += ROW_H;
 
-            // expanded settings
             if (open) {
                 fill(m, px + 10, y - 2, px + PANEL_W - 10, y - 1, 0x22FFFFFF);
+
+                // BIND row always first
+                if (y + SET_H <= TOP + 28 + contentH) {
+                    boolean bhov = hovered(mx, my, px + 12, y, px + PANEL_W - 8, y + SET_H);
+                    if (bhov || listening) fill(m, px + 12, y, px + PANEL_W - 8, y + SET_H,
+                            listening ? ThemeManager.withAlpha(accent, 0.2f) : 0x12FFFFFF);
+
+                    drawString(m, textRenderer, "Bind", px + 20, y + 4, 0xFFA0A0B0);
+                    String bval = listening ? "Press key..." : KeyUtil.getKeyName(mod.getKey());
+                    drawString(m, textRenderer, bval,
+                            px + PANEL_W - 14 - textRenderer.getWidth(bval), y + 4,
+                            listening ? accent : 0xFFCCCCDD);
+                    y += SET_H;
+                }
+
                 for (Setting s : mod.getSettings()) {
                     if (y + SET_H > TOP + 28 + contentH) break;
                     boolean shov = hovered(mx, my, px + 12, y, px + PANEL_W - 8, y + SET_H);
@@ -182,10 +185,8 @@ public class ClickGUI extends Screen {
 
                     drawString(m, textRenderer, s.getName(), px + 20, y + 4, 0xFFA0A0B0);
 
-                    // value with type hint
                     String val = s.getDisplayValue();
                     if (s instanceof NumberSetting) {
-                        // mini bar
                         NumberSetting ns = (NumberSetting) s;
                         float pct = (float) ((ns.get() - ns.getMin()) / (ns.getMax() - ns.getMin()));
                         int barX = px + PANEL_W - 90;
@@ -226,34 +227,25 @@ public class ClickGUI extends Screen {
             boolean sel = ThemeManager.getCurrent() == t;
             boolean hov = hovered(mx, my, x, y, x + cardW - 6, y + cardH - 6);
 
-            // card glow when selected
-            if (sel) {
-                fill(m, x - 1, y - 1, x + cardW - 5, y + cardH - 5, ThemeManager.withAlpha(t.colorPrimary, 0.35f));
-            }
+            if (sel) fill(m, x - 1, y - 1, x + cardW - 5, y + cardH - 5, ThemeManager.withAlpha(t.colorPrimary, 0.35f));
             fill(m, x, y, x + cardW - 6, y + cardH - 6, sel ? 0x28FFFFFF : (hov ? 0x18FFFFFF : 0x0CFFFFFF));
             if (sel) drawBorder(m, x, y, x + cardW - 6, y + cardH - 6, t.colorPrimary);
 
             drawString(m, textRenderer, t.name, x + 8, y + 8, sel ? 0xFFFFFFFF : 0xFFC0C0D0);
-
-            // gradient preview strip
             int stripY = y + 24;
             for (int p = 0; p < cardW - 22; p++) {
                 float tt = (float) p / (cardW - 22);
-                int c = ThemeManager.lerpColor(t.colorPrimary, t.colorSecondary, tt);
-                fill(m, x + 8 + p, stripY, x + 9 + p, stripY + 10, c);
+                fill(m, x + 8 + p, stripY, x + 9 + p, stripY + 10,
+                        ThemeManager.lerpColor(t.colorPrimary, t.colorSecondary, tt));
             }
         }
     }
 
     private void drawToggle(MatrixStack m, int x, int y, boolean on, int accent) {
-        // track
         fill(m, x, y, x + 28, y + 12, on ? ThemeManager.withAlpha(accent, 0.85f) : 0xFF252535);
-        // soft edge
         if (on) fill(m, x, y, x + 28, y + 1, ThemeManager.withAlpha(0xFFFFFFFF, 0.15f));
-        // knob
         int kx = on ? x + 16 : x + 2;
         fill(m, kx, y + 1, kx + 10, y + 11, 0xFFFFFFFF);
-        // knob shine
         fill(m, kx + 1, y + 2, kx + 5, y + 5, 0x33FFFFFF);
     }
 
@@ -285,6 +277,9 @@ public class ClickGUI extends Screen {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        // Don't interact while binding
+        if (BindManager.isListening()) return true;
+
         int sx = TOP;
         int px = sx + SIDEBAR_W + GAP;
         int sy = TOP + 50;
@@ -332,7 +327,7 @@ public class ClickGUI extends Screen {
             if (y + 18 > TOP + 28 + contentH) break;
 
             if (hovered((int) mx, (int) my, px + 4, y, px + PANEL_W - 4, y + ROW_H)) {
-                if (button == 1 && mod.hasSettings()) {
+                if (button == 1) { // RMB — expand always (for bind)
                     if (expanded.contains(mod.getName())) expanded.remove(mod.getName());
                     else expanded.add(mod.getName());
                 } else if (button == 0) {
@@ -343,6 +338,15 @@ public class ClickGUI extends Screen {
             y += ROW_H;
 
             if (expanded.contains(mod.getName())) {
+                // Bind row
+                if (y + SET_H <= TOP + 28 + contentH) {
+                    if (hovered((int) mx, (int) my, px + 12, y, px + PANEL_W - 8, y + SET_H) && button == 0) {
+                        BindManager.startListening(mod);
+                        return true;
+                    }
+                    y += SET_H;
+                }
+
                 for (Setting s : mod.getSettings()) {
                     if (y + SET_H > TOP + 28 + contentH) break;
                     if (hovered((int) mx, (int) my, px + 12, y, px + PANEL_W - 8, y + SET_H) && button == 0) {
@@ -373,6 +377,11 @@ public class ClickGUI extends Screen {
 
     @Override
     public boolean keyPressed(int key, int scan, int modifiers) {
+        if (BindManager.isListening()) {
+            // Handled by KeyboardMixin / BindManager, but also catch here
+            BindManager.onKey(key);
+            return true;
+        }
         if (searchFocused) {
             if (key == 259 && !search.isEmpty()) {
                 search = search.substring(0, search.length() - 1);
@@ -385,6 +394,7 @@ public class ClickGUI extends Screen {
 
     @Override
     public boolean charTyped(char chr, int modifiers) {
+        if (BindManager.isListening()) return true;
         if (searchFocused && chr >= 32 && search.length() < 24) {
             search += chr;
             return true;
@@ -394,4 +404,10 @@ public class ClickGUI extends Screen {
 
     @Override
     public boolean shouldPause() { return false; }
+
+    @Override
+    public void onClose() {
+        BindManager.cancel();
+        super.onClose();
+    }
 }
