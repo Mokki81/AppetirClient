@@ -1,17 +1,22 @@
 package com.appetir.modules.impl;
 
 import com.appetir.modules.Module;
+import com.appetir.settings.BooleanSetting;
 
-// Projectiles показывает траектории снарядов (стрелы, снежки, файерболы).
-// Рендер через mixin на WorldRenderer::render — рисуем линии по пути снаряда.
 public class Projectiles extends Module {
 
-    public static boolean showArrows     = true;
-    public static boolean showSnowballs  = true;
-    public static boolean showFireballs  = true;
-    public static int     trailLength    = 20; // тиков
+    private final BooleanSetting arrows = new BooleanSetting("Arrows", "Show arrows", true);
+    private final BooleanSetting pearls = new BooleanSetting("Pearls", "Show ender pearls", true);
+    private final BooleanSetting snowballs = new BooleanSetting("Snowballs", "Show snowballs", true);
 
     public Projectiles() {
-        super("Projectiles", "Траектории снарядов", Category.RENDER);
+        super("Projectiles", "ESP снарядов", Category.RENDER);
+        addSetting(arrows);
+        addSetting(pearls);
+        addSetting(snowballs);
     }
+
+    public boolean showArrows() { return arrows.get(); }
+    public boolean showPearls() { return pearls.get(); }
+    public boolean showSnowballs() { return snowballs.get(); }
 }

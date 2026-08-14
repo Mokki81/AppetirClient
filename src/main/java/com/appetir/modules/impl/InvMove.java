@@ -1,13 +1,19 @@
 package com.appetir.modules.impl;
 
 import com.appetir.modules.Module;
-import net.minecraft.client.MinecraftClient;
+import com.appetir.settings.BooleanSetting;
 
-// InvMove — движение при открытом инвентаре.
-// Реализуется через mixin на KeyboardInput, чтобы клавиши WASD работали даже в GUI.
 public class InvMove extends Module {
 
+    private final BooleanSetting sneak = new BooleanSetting("Sneak", "Allow sneak in GUI", true);
+    private final BooleanSetting jump = new BooleanSetting("Jump", "Allow jump in GUI", true);
+
     public InvMove() {
-        super("InvMove", "Позволяет двигаться при открытом инвентаре", Category.MOVEMENT);
+        super("InvMove", "Движение в инвентаре", Category.MOVEMENT);
+        addSetting(sneak);
+        addSetting(jump);
     }
+
+    public boolean allowSneak() { return isEnabled() && sneak.get(); }
+    public boolean allowJump() { return isEnabled() && jump.get(); }
 }
