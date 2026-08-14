@@ -1,5 +1,6 @@
 package com.appetir.alt;
 
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /**
@@ -13,8 +14,7 @@ public class Alt {
 
     public Alt(String name) {
         this.name = name.trim();
-        // Offline UUID (same algorithm as Minecraft)
-        this.uuid = UUID.nameUUIDFromBytes(("OfflinePlayer:" + this.name).getBytes()).toString();
+        this.uuid = offlineUuid(this.name);
         this.lastUsed = System.currentTimeMillis();
     }
 
@@ -22,6 +22,11 @@ public class Alt {
         this.name = name;
         this.uuid = uuid;
         this.lastUsed = lastUsed;
+    }
+
+    /** Minecraft offline UUID algorithm with fixed UTF-8. */
+    public static String offlineUuid(String name) {
+        return UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8)).toString();
     }
 
     public String getName() {

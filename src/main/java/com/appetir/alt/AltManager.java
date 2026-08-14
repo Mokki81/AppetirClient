@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Offline-only Alt Manager.
@@ -37,9 +38,8 @@ public class AltManager {
     }
 
     public boolean addAlt(String name) {
-        if (name == null || name.trim().isEmpty() || name.length() > 16) return false;
+        if (!isValidName(name)) return false;
         name = name.trim();
-        if (!name.matches("[a-zA-Z0-9_]{3,16}")) return false;
 
         Alt alt = new Alt(name);
         if (alts.contains(alt)) return false;
@@ -59,10 +59,6 @@ public class AltManager {
         return removed;
     }
 
-    /**
-     * Removes alt by name. Returns true if something was removed from the list.
-     * Persistence failure is logged but does not invert the remove result.
-     */
     public boolean removeByName(String name) {
         if (name == null) return false;
         boolean removed = alts.removeIf(a -> a.getName().equalsIgnoreCase(name));
@@ -104,22 +100,59 @@ public class AltManager {
     private void load() {
         alts.clear();
         if (!saveFile.exists()) return;
+
+        List<String> lines;
         try {
-            List<String> lines = Files.readAllLines(saveFile.toPath(), StandardCharsets.UTF_8);
-            for (String line : lines) {
-                line = line.trim();
-                if (line.isEmpty() || line.startsWith("#")) continue;
-                String[] parts = line.split(":", 3);
-                if (parts.length >= 1) {
-                    String n = parts[0];
-                    String uuid = parts.length > 1 ? parts[1] : UUIDFromName(n);
-                    long last = parts.length > 2 ? Long.parseLong(parts[2]) : System.currentTimeMillis();
-                    alts.add(new Alt(n, uuid, last));
-                }
-            }
+            lines = Files.readAllLines(saveFile.toPath(), StandardCharsets.UTF_8);
         } catch (Exception e) {
-            System.err.println("[Appetir] Failed to load alts: " + e.getMessage());
+            System.err.println("[Appetir] Failed to read alts file: " + e.getMessage());
             e.printStackTrace();
+            return;
+        }
+
+        int lineNo = 0;
+        for (String line : lines) {
+            lineNo++;
+            line = line.trim();
+            if (line.isEmpty() || line.startsWith("#")) continue;
+
+            try {
+                String[] parts = line.split(":", 3);
+                if (parts.length < 1) continue;
+
+                String n = parts[0] != null ? parts[0].trim() : "";
+                if (!isValidName(n)) {
+                    System.err.println("[Appetir] Skip invalid alt name at line " + lineNo + ": '" + n + "'");
+                    continue;
+                }
+
+                String uuid;
+                if (parts.length > 1 && isValidUuid(parts[1].trim())) {
+                    uuid = parts[1].trim();
+                } else {
+                    uuid = Alt.offlineUuid(n);
+                    if (parts.length > 1 && !parts[1].trim().isEmpty()) {
+                        System.err.println("[Appetir] Bad UUID at line " + lineNo + ", regenerated offline UUID");
+                    }
+                }
+
+                long last = System.currentTimeMillis();
+                if (parts.length > 2) {
+                    try {
+                        last = Long.parseLong(parts[2].trim());
+                        if (last < 0) last = System.currentTimeMillis();
+                    } catch (NumberFormatException nfe) {
+                        System.err.println("[Appetir] Bad timestamp at line " + lineNo + ", using now");
+                    }
+                }
+
+                Alt alt = new Alt(n, uuid, last);
+                if (!alts.contains(alt)) {
+                    alts.add(alt);
+                }
+            } catch (Exception e) {
+                System.err.println("[Appetir] Skip corrupt alt line " + lineNo + ": " + e.getMessage());
+            }
         }
     }
 
@@ -145,7 +178,17 @@ public class AltManager {
         }
     }
 
-    private static String UUIDFromName(String name) {
-        return java.util.UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes()).toString();
+    private static boolean isValidName(String name) {
+        return name != null && name.matches("[a-zA-Z0-9_]{3,16}");
+    }
+
+    private static boolean isValidUuid(String uuid) {
+        if (uuid == null || uuid.isEmpty()) return false;
+        try {
+            UUID.fromString(uuid);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 }

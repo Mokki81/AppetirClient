@@ -18,7 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
 /**
- * Config system — modules, keybinds, theme, HUD.
+ * Config system with debounced disk writes.
  * File: .minecraft/appetir/config.json
  */
 public class ConfigManager {
@@ -27,6 +27,11 @@ public class ConfigManager {
     private final File configDir;
     private final File configFile;
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
+
+    private boolean dirty = false;
+    private long dirtySince = 0L;
+    /** Minimum ms between markDirty and actual write (coalesce rapid toggles). */
+    private static final long DEBOUNCE_MS = 400L;
 
     public ConfigManager() {
         instance = this;
@@ -76,11 +81,12 @@ public class ConfigManager {
                         if (!modules.has(mod.getName())) continue;
                         JsonObject entry = modules.getAsJsonObject(mod.getName());
                         try {
-                            if (entry.has("enabled") && entry.get("enabled").getAsBoolean()) {
-                                mod.setEnabled(true);
-                            }
                             if (entry.has("key")) {
-                                mod.setKey(entry.get("key").getAsInt());
+                                mod.setKeyRaw(entry.get("key").getAsInt());
+                            }
+                            if (entry.has("enabled") && entry.get("enabled").getAsBoolean()) {
+                                // Full enable with callbacks (Fullbright etc.)
+                                mod.setEnabled(true);
                             }
                         } catch (Exception e) {
                             System.err.println("[Appetir] Failed to apply config for module "
@@ -91,11 +97,34 @@ public class ConfigManager {
                 }
             }
 
+            dirty = false;
             System.out.println("[Appetir] Config loaded from " + configFile.getAbsolutePath());
         } catch (Exception e) {
             System.err.println("[Appetir] Failed to load config: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    /** Schedule a save; actual write happens in flushDirty() after debounce. */
+    public void markDirty() {
+        if (!dirty) {
+            dirty = true;
+            dirtySince = System.currentTimeMillis();
+        }
+    }
+
+    /** Called each client tick — writes only after DEBOUNCE_MS of inactivity. */
+    public void flushDirty() {
+        if (!dirty) return;
+        if (System.currentTimeMillis() - dirtySince < DEBOUNCE_MS) return;
+        dirty = false;
+        save();
+    }
+
+    /** Force immediate write (shutdown / explicit). */
+    public void saveNow() {
+        dirty = false;
+        save();
     }
 
     public void save() {
@@ -132,11 +161,9 @@ public class ConfigManager {
         }
     }
 
-    /**
-     * Save without spamming success logs. Errors still go to stderr via save().
-     */
+    /** @deprecated use markDirty(); kept for call sites */
     public void saveQuiet() {
-        save();
+        markDirty();
     }
 
     public File getConfigFile() {

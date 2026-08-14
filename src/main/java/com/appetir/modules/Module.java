@@ -47,20 +47,36 @@ public abstract class Module {
         setEnabled(!enabled);
     }
 
+    /**
+     * Enables/disables the module. Callbacks run before state is committed.
+     * On failure, previous state is restored.
+     */
     public final void setEnabled(boolean value) {
         if (this.enabled == value) return;
-        this.enabled = value;
+
+        boolean previous = this.enabled;
         try {
-            if (value) onEnable();
-            else onDisable();
+            if (value) {
+                onEnable();
+            } else {
+                onDisable();
+            }
+            this.enabled = value;
             NotificationManager.pushModule(name, value);
+            markConfigDirty();
         } catch (Exception e) {
-            System.err.println("[Appetir] Error in module " + name + ": " + e.getMessage());
+            this.enabled = previous;
+            System.err.println("[Appetir] Error in module " + name
+                    + " (" + e.getClass().getSimpleName() + "): "
+                    + (e.getMessage() != null ? e.getMessage() : "(no message)")
+                    + " — state rolled back to " + previous);
             e.printStackTrace();
         }
+    }
 
-        ConfigManager cm = ConfigManager.getInstance();
-        if (cm != null) cm.saveQuiet();
+    /** Force state without callbacks (used carefully during config load). */
+    public final void setEnabledRaw(boolean value) {
+        this.enabled = value;
     }
 
     public boolean isEnabled() { return enabled; }
@@ -70,9 +86,32 @@ public abstract class Module {
     public int getKey() { return key; }
 
     public void setKey(int key) {
+        if (this.key == key) return;
+
+        // Unique binds: clear same key on other modules
+        if (key >= 0) {
+            ModuleManager mm = ModuleManager.getInstance();
+            if (mm != null) {
+                for (Module m : mm.getModules()) {
+                    if (m != this && m.getKey() == key) {
+                        m.key = -1;
+                    }
+                }
+            }
+        }
+
         this.key = key;
+        markConfigDirty();
+    }
+
+    /** Assign key without side effects (config load). */
+    public void setKeyRaw(int key) {
+        this.key = key;
+    }
+
+    private static void markConfigDirty() {
         ConfigManager cm = ConfigManager.getInstance();
-        if (cm != null) cm.saveQuiet();
+        if (cm != null) cm.markDirty();
     }
 
     public enum Category {

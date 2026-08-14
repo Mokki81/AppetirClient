@@ -1,5 +1,6 @@
 package com.appetir.modules;
 
+import com.appetir.config.ConfigManager;
 import com.appetir.modules.impl.*;
 
 import java.util.ArrayList;
@@ -83,6 +84,10 @@ public class ModuleManager {
     }
 
     public void onTick() {
+        // Flush debounced config once per tick if needed
+        ConfigManager cm = ConfigManager.getInstance();
+        if (cm != null) cm.flushDirty();
+
         for (Module m : modules) {
             if (!m.isEnabled()) continue;
             try {
@@ -96,10 +101,12 @@ public class ModuleManager {
         }
     }
 
+    /** Toggle at most one module per key (unique binds). */
     public void onKeyPress(int key) {
         for (Module m : modules) {
             if (m.getKey() == key) {
                 m.toggle();
+                return;
             }
         }
     }
