@@ -1,30 +1,30 @@
 package com.appetir.modules.impl;
 
 import com.appetir.modules.Module;
+import com.appetir.settings.BooleanSetting;
 import net.minecraft.client.MinecraftClient;
 
-// AirStuck останавливает игрока в воздухе блокируя движение и пакеты.
-// Полная блокировка пакетов реализуется через mixin на ClientPlayNetworkHandler.
-// Здесь управляем состоянием и обнуляем скорость каждый тик.
 public class AirStuck extends Module {
 
+    private final BooleanSetting noClip = new BooleanSetting("NoClip", "Disable collision", true);
+
     public AirStuck() {
-        super("AirStuck", "Останавливает игрока в воздухе, блокируя пакеты", Category.MOVEMENT);
+        super("AirStuck", "Зависание в воздухе", Category.MOVEMENT);
+        addSetting(noClip);
     }
 
     @Override
     public void onTick() {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null) return;
-        // Обнуляем скорость — игрок висит на месте
         mc.player.setVelocity(0, 0, 0);
-        mc.player.noClip = true;
+        mc.player.velocityModified = true;
+        if (noClip.get()) mc.player.noClip = true;
     }
 
     @Override
     public void onDisable() {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player == null) return;
-        mc.player.noClip = false;
+        if (mc.player != null) mc.player.noClip = false;
     }
 }

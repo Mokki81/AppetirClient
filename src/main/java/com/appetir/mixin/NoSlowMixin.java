@@ -6,39 +6,40 @@ import net.minecraft.client.input.Input;
 import net.minecraft.client.network.ClientPlayerEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ClientPlayerEntity.class)
 public class NoSlowMixin {
 
-    // Перехватываем множитель скорости при использовании предметов
-    @Redirect(
-        method = "tickMovement",
-        at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/input/Input;movementForward()F",
-            ordinal = 0)
-    )
-    private float redirectMovementForward(Input input) {
-        if (isEnabled()) return input.movementForward;
-        return input.movementForward;
+    /**
+     * After vanilla applies item-use slowdown (multiplies movement by 0.2),
+     * restore full movement if NoSlow is enabled.
+     */
+    @Inject(method = "tickMovement", at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/network/ClientPlayerEntity;isUsingItem()Z",
+            shift = At.Shift.AFTER
+    ))
+    private void onTickMovement(CallbackInfo ci) {
+        ClientPlayerEntity player = (ClientPlayerEntity) (Object) this;
+        if (!isNoSlowItems()) return;
+        if (!player.isUsingItem()) return;
+
+        Input input = player.input;
+        // Vanilla multiplies by 0.2 while using item — restore
+        input.movementSideways /= 0.2f;
+        input.movementForward /= 0.2f;
     }
 
-    @Redirect(
-        method = "tickMovement",
-        at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/input/Input;movementSideways()F",
-            ordinal = 0)
-    )
-    private float redirectMovementSideways(Input input) {
-        if (isEnabled()) return input.movementSideways;
-        return input.movementSideways;
-    }
-
-    private boolean isEnabled() {
+    private boolean isNoSlowItems() {
         ModuleManager mm = ModuleManager.getInstance();
         if (mm == null) return false;
-        return mm.getModules().stream()
-            .filter(m -> m instanceof NoSlow)
-            .anyMatch(m -> m.isEnabled());
+        for (var m : mm.getModules()) {
+            if (m instanceof NoSlow && m.isEnabled()) {
+                return ((NoSlow) m).items();
+            }
+        }
+        return false;
     }
 }
