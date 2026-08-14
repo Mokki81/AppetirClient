@@ -1,19 +1,37 @@
 package com.appetir.modules.impl;
 
 import com.appetir.modules.Module;
+import com.appetir.settings.BooleanSetting;
 
-// NoRender отключает рендер выбранных элементов мира.
-// Каждый флаг читается из соответствующего mixin.
 public class NoRender extends Module {
 
-    public static boolean noFire      = true;
-    public static boolean noFog       = true;
-    public static boolean noVignette  = true;
-    public static boolean noPumpkin   = true;  // тыква на голове
-    public static boolean noTotemAnim = true;  // анимация тотема
-    public static boolean noOverlay   = false; // оверлей воды/лавы
+    private final BooleanSetting fire = new BooleanSetting("Fire", "Hide fire overlay", true);
+    private final BooleanSetting fog = new BooleanSetting("Fog", "Disable fog", true);
+    private final BooleanSetting vignette = new BooleanSetting("Vignette", "Hide vignette", true);
+    private final BooleanSetting pumpkin = new BooleanSetting("Pumpkin", "Hide pumpkin overlay", true);
+    private final BooleanSetting totem = new BooleanSetting("Totem", "Hide totem animation", true);
+    private final BooleanSetting bossBar = new BooleanSetting("BossBar", "Hide boss bars", false);
+    private final BooleanSetting scoreboard = new BooleanSetting("Scoreboard", "Hide scoreboard", false);
 
     public NoRender() {
-        super("NoRender", "Отключение рендера элементов", Category.RENDER);
+        super("NoRender", "Отключение лишнего рендера", Category.RENDER);
+        addSetting(fire);
+        addSetting(fog);
+        addSetting(vignette);
+        addSetting(pumpkin);
+        addSetting(totem);
+        addSetting(bossBar);
+        addSetting(scoreboard);
     }
+
+    public boolean noFire() { return isEnabled() && fire.get(); }
+    public boolean noFog() { return isEnabled() && fog.get(); }
+    public boolean noVignette() { return isEnabled() && vignette.get(); }
+    public boolean noPumpkin() { return isEnabled() && pumpkin.get(); }
+    public boolean noTotem() { return isEnabled() && totem.get(); }
+    public boolean noBossBar() { return isEnabled() && bossBar.get(); }
+    public boolean noScoreboard() { return isEnabled() && scoreboard.get(); }
+
+    // Legacy static access for old mixins
+    public static boolean noFog = true;
 }
