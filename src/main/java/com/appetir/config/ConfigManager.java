@@ -10,12 +10,15 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.client.MinecraftClient;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
 /**
- * Config system — saves/loads module states, keybinds, theme and HUD visibility.
+ * Config system — modules, keybinds, theme, HUD.
  * File: .minecraft/appetir/config.json
  */
 public class ConfigManager {
@@ -31,8 +34,8 @@ public class ConfigManager {
         this.configDir = new File(gameDir, "appetir");
         this.configFile = new File(configDir, "config.json");
 
-        if (!configDir.exists()) {
-            configDir.mkdirs();
+        if (!configDir.exists() && !configDir.mkdirs()) {
+            System.err.println("[Appetir] Failed to create config dir: " + configDir.getAbsolutePath());
         }
     }
 
@@ -40,10 +43,6 @@ public class ConfigManager {
         return instance;
     }
 
-    /**
-     * Load config and apply to modules / theme / hud.
-     * Call after ModuleManager is created.
-     */
     public void load() {
         if (!configFile.exists()) {
             System.out.println("[Appetir] No config found, using defaults");
@@ -54,38 +53,39 @@ public class ConfigManager {
             String json = new String(Files.readAllBytes(configFile.toPath()), StandardCharsets.UTF_8);
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
 
-            // HUD
             if (root.has("hudVisible")) {
                 AppetirClient.hudVisible = root.get("hudVisible").getAsBoolean();
             }
 
-            // Theme
             if (root.has("theme")) {
+                String themeName = root.get("theme").getAsString();
                 try {
-                    ThemeManager.Theme theme = ThemeManager.Theme.valueOf(root.get("theme").getAsString());
+                    ThemeManager.Theme theme = ThemeManager.Theme.valueOf(themeName);
                     ThemeManager.setCurrent(theme);
-                } catch (Exception ignored) {}
+                } catch (IllegalArgumentException e) {
+                    System.err.println("[Appetir] Unknown theme in config: '" + themeName
+                            + "' — keeping default " + ThemeManager.getCurrent().name());
+                }
             }
 
-            // Modules
             if (root.has("modules")) {
                 JsonObject modules = root.getAsJsonObject("modules");
                 ModuleManager mm = ModuleManager.getInstance();
                 if (mm != null) {
                     for (Module mod : mm.getModules()) {
-                        if (modules.has(mod.getName())) {
-                            JsonObject entry = modules.getAsJsonObject(mod.getName());
-                            if (entry.has("enabled")) {
-                                // set without firing onEnable/onDisable during load if possible,
-                                // but we want onEnable for things like Fullbright
-                                boolean enabled = entry.get("enabled").getAsBoolean();
-                                if (enabled) {
-                                    mod.setEnabled(true);
-                                }
+                        if (!modules.has(mod.getName())) continue;
+                        JsonObject entry = modules.getAsJsonObject(mod.getName());
+                        try {
+                            if (entry.has("enabled") && entry.get("enabled").getAsBoolean()) {
+                                mod.setEnabled(true);
                             }
                             if (entry.has("key")) {
                                 mod.setKey(entry.get("key").getAsInt());
                             }
+                        } catch (Exception e) {
+                            System.err.println("[Appetir] Failed to apply config for module "
+                                    + mod.getName() + ": " + e.getMessage());
+                            e.printStackTrace();
                         }
                     }
                 }
@@ -98,12 +98,12 @@ public class ConfigManager {
         }
     }
 
-    /**
-     * Save current state to disk.
-     */
     public void save() {
         try {
-            if (!configDir.exists()) configDir.mkdirs();
+            if (!configDir.exists() && !configDir.mkdirs()) {
+                System.err.println("[Appetir] Cannot create config directory");
+                return;
+            }
 
             JsonObject root = new JsonObject();
             root.addProperty("version", AppetirClient.VERSION);
@@ -126,8 +126,6 @@ public class ConfigManager {
             try (Writer writer = new OutputStreamWriter(new FileOutputStream(configFile), StandardCharsets.UTF_8)) {
                 writer.write(json);
             }
-
-            System.out.println("[Appetir] Config saved");
         } catch (Exception e) {
             System.err.println("[Appetir] Failed to save config: " + e.getMessage());
             e.printStackTrace();
@@ -135,12 +133,10 @@ public class ConfigManager {
     }
 
     /**
-     * Quick save — called after toggles. Debounced-ish by just writing.
+     * Save without spamming success logs. Errors still go to stderr via save().
      */
     public void saveQuiet() {
-        try {
-            save();
-        } catch (Exception ignored) {}
+        save();
     }
 
     public File getConfigFile() {

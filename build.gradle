@@ -1,9 +1,10 @@
 plugins {
-    id 'fabric-loom' version '0.12-SNAPSHOT'
+    // Pinned release instead of SNAPSHOT for reproducible builds
+    id 'fabric-loom' version '0.12.56'
 }
 
 group = 'com.appetir'
-version = '1.0'
+version = '1.6'
 
 repositories {
     mavenCentral()

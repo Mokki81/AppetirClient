@@ -84,12 +84,14 @@ public class ModuleManager {
 
     public void onTick() {
         for (Module m : modules) {
-            if (m.isEnabled()) {
-                try {
-                    m.onTick();
-                } catch (Exception e) {
-                    System.err.println("[Appetir] Tick error in " + m.getName() + ": " + e.getMessage());
-                }
+            if (!m.isEnabled()) continue;
+            try {
+                m.onTick();
+            } catch (Exception e) {
+                System.err.println("[Appetir] Tick error in " + m.getName()
+                        + " (" + e.getClass().getSimpleName() + "): "
+                        + (e.getMessage() != null ? e.getMessage() : "(no message)"));
+                e.printStackTrace();
             }
         }
     }

@@ -1,0 +1,61 @@
+# Gradle
+.gradle/
+build/
+out/
+bin/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.swp
+*.swo
+.classpath
+.project
+.settings/
+
+# Fabric / Loom run directory & caches
+run/
+runs/
+logs/
+libraries/
+.fabric/
+
+# Minecraft runtime junk (never commit)
+options.txt
+optionsof.txt
+optionsshaders.txt
+usercache.json
+usernamecache.json
+servers.dat
+servers.dat_old
+*.log
+crash-reports/
+saves/
+resourcepacks/
+shaderpacks/
+screenshots/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local configs / secrets
+*.local
+.env
+.env.*
+
+# Compiled
+*.class
+*.jar
+!gradle/wrapper/*.jar
+*.war
+*.ear
+
+# Maps / remapped
+*.lmap
+*.tiny

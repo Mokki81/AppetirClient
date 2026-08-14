@@ -39,30 +39,39 @@ public class AltManager {
     public boolean addAlt(String name) {
         if (name == null || name.trim().isEmpty() || name.length() > 16) return false;
         name = name.trim();
-        // basic validation
         if (!name.matches("[a-zA-Z0-9_]{3,16}")) return false;
 
         Alt alt = new Alt(name);
         if (alts.contains(alt)) return false;
 
         alts.add(0, alt);
-        save();
+        if (!save()) {
+            System.err.println("[Appetir] Alt added in memory but failed to persist: " + name);
+        }
         return true;
     }
 
     public boolean removeAlt(Alt alt) {
         boolean removed = alts.remove(alt);
-        if (removed) save();
+        if (removed && !save()) {
+            System.err.println("[Appetir] Alt removed in memory but failed to persist");
+        }
         return removed;
     }
 
+    /**
+     * Removes alt by name. Returns true if something was removed from the list.
+     * Persistence failure is logged but does not invert the remove result.
+     */
     public boolean removeByName(String name) {
-        return alts.removeIf(a -> a.getName().equalsIgnoreCase(name)) && save();
+        if (name == null) return false;
+        boolean removed = alts.removeIf(a -> a.getName().equalsIgnoreCase(name));
+        if (removed && !save()) {
+            System.err.println("[Appetir] Alt(s) removed in memory but failed to persist: " + name);
+        }
+        return removed;
     }
 
-    /**
-     * Switches the current Minecraft session to the given offline alt.
-     */
     public boolean login(Alt alt) {
         if (alt == null) return false;
         try {
@@ -71,12 +80,14 @@ public class AltManager {
             field.setAccessible(true);
             field.set(MinecraftClient.getInstance(), session);
             alt.touch();
-            // move to top
             alts.remove(alt);
             alts.add(0, alt);
-            save();
+            if (!save()) {
+                System.err.println("[Appetir] Login ok but alt list failed to persist");
+            }
             return true;
         } catch (Exception e) {
+            System.err.println("[Appetir] Alt login failed: " + e.getMessage());
             e.printStackTrace();
             return false;
         }
@@ -100,21 +111,27 @@ public class AltManager {
                 if (line.isEmpty() || line.startsWith("#")) continue;
                 String[] parts = line.split(":", 3);
                 if (parts.length >= 1) {
-                    String name = parts[0];
-                    String uuid = parts.length > 1 ? parts[1] : UUIDFromName(name);
+                    String n = parts[0];
+                    String uuid = parts.length > 1 ? parts[1] : UUIDFromName(n);
                     long last = parts.length > 2 ? Long.parseLong(parts[2]) : System.currentTimeMillis();
-                    alts.add(new Alt(name, uuid, last));
+                    alts.add(new Alt(n, uuid, last));
                 }
             }
         } catch (Exception e) {
+            System.err.println("[Appetir] Failed to load alts: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
     private boolean save() {
         try {
-            if (!saveFile.getParentFile().exists()) saveFile.getParentFile().mkdirs();
-            try (BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(saveFile), StandardCharsets.UTF_8))) {
+            File parent = saveFile.getParentFile();
+            if (parent != null && !parent.exists() && !parent.mkdirs()) {
+                System.err.println("[Appetir] Cannot create alt save directory: " + parent);
+                return false;
+            }
+            try (BufferedWriter w = new BufferedWriter(
+                    new OutputStreamWriter(new FileOutputStream(saveFile), StandardCharsets.UTF_8))) {
                 w.write("# Appetir Offline Alts - format: name:uuid:lastUsed\n");
                 for (Alt a : alts) {
                     w.write(a.getName() + ":" + a.getUuid() + ":" + a.getLastUsed() + "\n");
@@ -122,6 +139,7 @@ public class AltManager {
             }
             return true;
         } catch (Exception e) {
+            System.err.println("[Appetir] Failed to save alts: " + e.getMessage());
             e.printStackTrace();
             return false;
         }
