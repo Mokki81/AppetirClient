@@ -7,9 +7,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * Central registry and tick dispatcher for all modules.
- */
 public class ModuleManager {
 
     private static ModuleManager instance;
@@ -54,6 +51,7 @@ public class ModuleManager {
         add(new GlassHands());
         add(new Hud());
         add(new ItemPhysic());
+        add(new Keystrokes());
         add(new NameTags());
         add(new NightVision());
         add(new NoRender());

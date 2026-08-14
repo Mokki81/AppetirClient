@@ -5,6 +5,8 @@ import com.appetir.config.ConfigManager;
 import com.appetir.gui.AltManagerScreen;
 import com.appetir.gui.ClickGUI;
 import com.appetir.modules.ModuleManager;
+import com.appetir.util.BindManager;
+import com.appetir.util.KeystrokesState;
 import net.minecraft.client.Keyboard;
 import net.minecraft.client.MinecraftClient;
 import org.lwjgl.glfw.GLFW;
@@ -16,23 +18,34 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Keyboard.class)
 public class KeyboardMixin {
 
-    @Inject(method = "onKey", at = @At("HEAD"))
+    @Inject(method = "onKey", at = @At("HEAD"), cancellable = true)
     private void onKey(long window, int key, int scancode, int action, int modifiers, CallbackInfo ci) {
+        // Track for keystrokes (press + release)
+        KeystrokesState.onKey(key, action);
+
         if (action != GLFW.GLFW_PRESS) return;
+
+        // Bind mode has priority
+        if (BindManager.isListening()) {
+            if (BindManager.onKey(key)) {
+                ci.cancel();
+            }
+            return;
+        }
 
         MinecraftClient mc = MinecraftClient.getInstance();
 
-        // Right Shift — open / close ClickGUI
+        // Right Shift — ClickGUI
         if (key == GLFW.GLFW_KEY_RIGHT_SHIFT) {
             if (mc.currentScreen instanceof ClickGUI) {
                 mc.setScreen(null);
-            } else if (mc.currentScreen == null) {
+            } else if (mc.currentScreen == null || mc.currentScreen instanceof AltManagerScreen) {
                 mc.setScreen(new ClickGUI());
             }
             return;
         }
 
-        // Right Control — open Alt Manager
+        // Right Control — Alt Manager
         if (key == GLFW.GLFW_KEY_RIGHT_CONTROL) {
             if (mc.currentScreen instanceof AltManagerScreen) {
                 mc.setScreen(null);
@@ -42,7 +55,7 @@ public class KeyboardMixin {
             return;
         }
 
-        // Right Alt — toggle HUD visibility
+        // Right Alt — HUD toggle
         if (key == GLFW.GLFW_KEY_RIGHT_ALT) {
             AppetirClient.hudVisible = !AppetirClient.hudVisible;
             ConfigManager cm = ConfigManager.getInstance();
@@ -50,7 +63,7 @@ public class KeyboardMixin {
             return;
         }
 
-        // Module keybinds (only when no screen is open)
+        // Module keybinds
         if (mc.currentScreen == null) {
             ModuleManager mm = ModuleManager.getInstance();
             if (mm != null) mm.onKeyPress(key);
