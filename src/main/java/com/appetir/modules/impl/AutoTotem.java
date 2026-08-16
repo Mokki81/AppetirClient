@@ -8,44 +8,111 @@ import net.minecraft.screen.PlayerScreenHandler;
 import net.minecraft.screen.slot.SlotActionType;
 
 /**
- * Moves a totem into offhand with full 3-click swap so cursor is never left holding an item.
+ * State machine swap: one click per tick to reduce inventory desync.
  */
 public class AutoTotem extends Module {
 
-    private int cooldown = 0;
+    private enum Phase {
+        IDLE, PICKUP, TO_OFFHAND, RETURN, COOLDOWN
+    }
+
+    private Phase phase = Phase.IDLE;
+    private int containerSlot = -1;
+    private int syncId = -1;
+    private int waitTicks = 0;
 
     public AutoTotem() {
         super("AutoTotem", "Автоматически кладёт тотем в оффхенд", Category.COMBAT);
     }
 
     @Override
+    public void onDisable() {
+        phase = Phase.IDLE;
+        containerSlot = -1;
+        syncId = -1;
+        waitTicks = 0;
+    }
+
+    @Override
     public void onTick() {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player == null || mc.interactionManager == null || mc.world == null) return;
-        if (cooldown > 0) { cooldown--; return; }
+        if (mc.player == null || mc.interactionManager == null || mc.world == null) {
+            phase = Phase.IDLE;
+            return;
+        }
 
-        // Only while player inventory is the active handler (not chest/etc.)
-        if (!(mc.player.currentScreenHandler instanceof PlayerScreenHandler)) return;
-        if (mc.player.currentScreenHandler != mc.player.playerScreenHandler) return;
+        if (!(mc.player.currentScreenHandler instanceof PlayerScreenHandler)) {
+            phase = Phase.IDLE;
+            return;
+        }
+        if (mc.player.currentScreenHandler != mc.player.playerScreenHandler) {
+            phase = Phase.IDLE;
+            return;
+        }
 
-        if (mc.player.getOffHandStack().getItem() == Items.TOTEM_OF_UNDYING) return;
-        // Don't swap while cursor already holds something — wait
-        if (!mc.player.inventory.getCursorStack().isEmpty()) return;
+        // Already has totem
+        if (mc.player.getOffHandStack().getItem() == Items.TOTEM_OF_UNDYING) {
+            phase = Phase.IDLE;
+            return;
+        }
 
-        int invSlot = findTotemInvSlot(mc);
-        if (invSlot < 0) return;
+        if (waitTicks > 0) {
+            waitTicks--;
+            return;
+        }
 
-        int containerSlot = invSlot < 9 ? invSlot + 36 : invSlot;
-        int syncId = mc.player.playerScreenHandler.syncId;
+        switch (phase) {
+            case IDLE:
+                if (!mc.player.inventory.getCursorStack().isEmpty()) return;
+                int inv = findTotemInvSlot(mc);
+                if (inv < 0) return;
+                containerSlot = inv < 9 ? inv + 36 : inv;
+                syncId = mc.player.playerScreenHandler.syncId;
+                phase = Phase.PICKUP;
+                // fall through same tick is ok for first step
+                // no break — do first click
 
-        // 1) pickup totem
-        mc.interactionManager.clickSlot(syncId, containerSlot, 0, SlotActionType.PICKUP, mc.player);
-        // 2) place into offhand (45) — if offhand had item, it goes to cursor
-        mc.interactionManager.clickSlot(syncId, 45, 0, SlotActionType.PICKUP, mc.player);
-        // 3) put previous offhand item (now on cursor) back into source slot
-        mc.interactionManager.clickSlot(syncId, containerSlot, 0, SlotActionType.PICKUP, mc.player);
+            case PICKUP:
+                if (!validHandler(mc)) { phase = Phase.IDLE; return; }
+                mc.interactionManager.clickSlot(syncId, containerSlot, 0, SlotActionType.PICKUP, mc.player);
+                phase = Phase.TO_OFFHAND;
+                waitTicks = 1;
+                break;
 
-        cooldown = 2; // brief pause to avoid double-fire
+            case TO_OFFHAND:
+                if (!validHandler(mc)) { phase = Phase.IDLE; return; }
+                // Abort if cursor somehow empty (desync)
+                if (mc.player.inventory.getCursorStack().isEmpty()
+                        && mc.player.getOffHandStack().getItem() != Items.TOTEM_OF_UNDYING) {
+                    phase = Phase.IDLE;
+                    return;
+                }
+                mc.interactionManager.clickSlot(syncId, 45, 0, SlotActionType.PICKUP, mc.player);
+                phase = Phase.RETURN;
+                waitTicks = 1;
+                break;
+
+            case RETURN:
+                if (!validHandler(mc)) { phase = Phase.IDLE; return; }
+                if (!mc.player.inventory.getCursorStack().isEmpty()) {
+                    mc.interactionManager.clickSlot(syncId, containerSlot, 0, SlotActionType.PICKUP, mc.player);
+                }
+                phase = Phase.COOLDOWN;
+                waitTicks = 2;
+                break;
+
+            case COOLDOWN:
+                phase = Phase.IDLE;
+                containerSlot = -1;
+                break;
+        }
+    }
+
+    private boolean validHandler(MinecraftClient mc) {
+        return mc.player != null
+                && mc.interactionManager != null
+                && mc.player.currentScreenHandler instanceof PlayerScreenHandler
+                && mc.player.currentScreenHandler.syncId == syncId;
     }
 
     private int findTotemInvSlot(MinecraftClient mc) {

@@ -101,26 +101,29 @@ public final class ModuleManager {
                 System.err.println("[Appetir] Tick error in " + m.getName()
                         + " (" + e.getClass().getSimpleName() + "): "
                         + (e.getMessage() != null ? e.getMessage() : "(no message)")
-                        + " — disabling module");
+                        + " — forceDisable");
                 e.printStackTrace();
-                try {
-                    m.setEnabled(false);
-                } catch (Exception disableEx) {
-                    m.setEnabledRaw(false);
-                }
+                // Guaranteed OFF even if onDisable throws
+                m.forceDisable();
             }
         }
     }
 
     public void rebuildKeyMap() {
         keyMap.clear();
+        boolean changed = false;
         for (Module m : modules) {
             int k = m.getKey();
             if (k >= 0 && !keyMap.containsKey(k)) {
                 keyMap.put(k, m);
             } else if (k >= 0) {
                 m.setKeyRaw(-1);
+                changed = true;
             }
+        }
+        if (changed) {
+            ConfigManager cm = ConfigManager.getInstance();
+            if (cm != null) cm.markDirty();
         }
     }
 
@@ -130,6 +133,8 @@ public final class ModuleManager {
         Module prev = keyMap.put(key, module);
         if (prev != null && prev != module) {
             prev.setKeyRaw(-1);
+            ConfigManager cm = ConfigManager.getInstance();
+            if (cm != null) cm.markDirty();
         }
     }
 

@@ -18,7 +18,9 @@ public final class FriendManager {
 
     private static volatile FriendManager instance;
 
+    /** Real UUID string → display name */
     private final Map<String, String> byUuid = new HashMap<>();
+    /** lowercase name → uuid string OR "name:key" for legacy */
     private final Map<String, String> byName = new HashMap<>();
     private final File file;
     private boolean dirty;
@@ -46,7 +48,6 @@ public final class FriendManager {
         String key = n.toLowerCase(Locale.ROOT);
         if (byName.containsKey(key)) return false;
         byName.put(key, "name:" + key);
-        byUuid.put("name:" + key, n);
         markDirty();
         return true;
     }
@@ -55,15 +56,27 @@ public final class FriendManager {
         if (player == null) return false;
         String uuid = player.getUuid().toString();
         String name = player.getGameProfile().getName();
+        promoteToUuid(uuid, name);
+        markDirty();
+        return true;
+    }
+
+    /** Move any legacy name entries for this player under the real UUID. */
+    private void promoteToUuid(String uuid, String name) {
         String nameKey = name.toLowerCase(Locale.ROOT);
 
+        // Remove all name keys that pointed at this uuid
         byName.entrySet().removeIf(e -> uuid.equals(e.getValue()));
-        byUuid.remove("name:" + nameKey);
+
+        // Remove legacy name: entry for this name
+        byName.remove(nameKey);
+
+        // Drop any leftover legacy keys that stored the same display name as value under name:
+        byUuid.entrySet().removeIf(e ->
+                e.getKey().startsWith("name:") && name.equalsIgnoreCase(e.getValue()));
 
         byUuid.put(uuid, name);
         byName.put(nameKey, uuid);
-        markDirty();
-        return true;
     }
 
     public boolean remove(String name) {
@@ -72,10 +85,10 @@ public final class FriendManager {
         String id = byName.remove(key);
         if (id == null) return false;
 
-        byUuid.remove(id);
-        byUuid.remove("name:" + key);
-
-        if (!id.startsWith("name:")) {
+        if (id.startsWith("name:")) {
+            // pure legacy
+        } else {
+            byUuid.remove(id);
             byName.entrySet().removeIf(e -> id.equals(e.getValue()));
         }
         markDirty();
@@ -86,9 +99,6 @@ public final class FriendManager {
         return name != null && byName.containsKey(name.toLowerCase(Locale.ROOT));
     }
 
-    /**
-     * Read-only check for render path — no rename upgrades, no markDirty.
-     */
     public boolean isFriendReadOnly(PlayerEntity player) {
         if (player == null) return false;
         if (byUuid.containsKey(player.getUuid().toString())) return true;
@@ -113,10 +123,7 @@ public final class FriendManager {
         }
         String name = player.getGameProfile().getName();
         if (isFriend(name)) {
-            byUuid.remove("name:" + name.toLowerCase(Locale.ROOT));
-            byName.remove(name.toLowerCase(Locale.ROOT));
-            byUuid.put(uuid, name);
-            byName.put(name.toLowerCase(Locale.ROOT), uuid);
+            promoteToUuid(uuid, name);
             markDirty();
             return true;
         }
@@ -140,9 +147,21 @@ public final class FriendManager {
         }
     }
 
+    /** Unique display names only (no duplicate legacy + UUID). */
     public Set<String> getFriends() {
         Set<String> names = new HashSet<>();
-        for (String v : byUuid.values()) names.add(v);
+        // Prefer UUID entries
+        for (Map.Entry<String, String> e : byUuid.entrySet()) {
+            if (!e.getKey().startsWith("name:")) {
+                names.add(e.getValue());
+            }
+        }
+        // Legacy name-only not yet promoted
+        for (Map.Entry<String, String> e : byName.entrySet()) {
+            if (e.getValue().startsWith("name:")) {
+                names.add(e.getKey()); // stored lowercase — improve: keep original casing if needed
+            }
+        }
         return Collections.unmodifiableSet(names);
     }
 
@@ -178,12 +197,10 @@ public final class FriendManager {
                     } catch (IllegalArgumentException e) {
                         String key = line.toLowerCase(Locale.ROOT);
                         byName.put(key, "name:" + key);
-                        byUuid.put("name:" + key, line);
                     }
                 } else {
                     String key = line.toLowerCase(Locale.ROOT);
                     byName.put(key, "name:" + key);
-                    byUuid.put("name:" + key, line);
                 }
             }
         } catch (Exception e) {
@@ -195,18 +212,20 @@ public final class FriendManager {
         try (BufferedWriter w = new BufferedWriter(
                 new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
             w.write("# Appetir Friends — uuid:name or name\n");
-            Set<String> written = new HashSet<>();
+            Set<String> writtenUuid = new HashSet<>();
+            Set<String> writtenName = new HashSet<>();
+
             for (Map.Entry<String, String> e : byUuid.entrySet()) {
-                String id = e.getKey();
-                String name = e.getValue();
-                if (id.startsWith("name:")) {
-                    if (written.add("n:" + name.toLowerCase(Locale.ROOT))) {
-                        w.write(name + "\n");
-                    }
-                } else {
-                    if (written.add("u:" + id)) {
-                        w.write(id + ":" + name + "\n");
-                    }
+                if (e.getKey().startsWith("name:")) continue;
+                if (writtenUuid.add(e.getKey())) {
+                    w.write(e.getKey() + ":" + e.getValue() + "\n");
+                    writtenName.add(e.getValue().toLowerCase(Locale.ROOT));
+                }
+            }
+            for (Map.Entry<String, String> e : byName.entrySet()) {
+                if (!e.getValue().startsWith("name:")) continue;
+                if (writtenName.add(e.getKey())) {
+                    w.write(e.getKey() + "\n");
                 }
             }
         } catch (Exception e) {

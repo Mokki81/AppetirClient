@@ -84,6 +84,23 @@ public abstract class Module {
         this.enabled = value;
     }
 
+    /**
+     * Emergency path after repeated failures: force OFF even if onDisable throws.
+     * Always ends with enabled=false.
+     */
+    public final void forceDisable() {
+        try {
+            if (enabled) onDisable();
+        } catch (Exception e) {
+            System.err.println("[Appetir] forceDisable onDisable failed for " + name + ": " + e.getMessage());
+            e.printStackTrace();
+        }
+        this.enabled = false;
+        try {
+            markConfigDirty();
+        } catch (Exception ignored) {}
+    }
+
     public boolean isEnabled() { return enabled; }
     public String getName() { return name; }
     public String getDescription() { return description; }
