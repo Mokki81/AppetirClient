@@ -1,5 +1,6 @@
 package com.appetir.modules;
 
+import com.appetir.client.ClientMode;
 import com.appetir.config.ConfigManager;
 import com.appetir.settings.Setting;
 import com.appetir.util.NotificationManager;
@@ -8,9 +9,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Base class for all client modules.
- */
 public abstract class Module {
 
     private final String name;
@@ -47,20 +45,19 @@ public abstract class Module {
         setEnabled(!enabled);
     }
 
-    /**
-     * Enables/disables the module. Callbacks run before state is committed.
-     * On failure, previous state is restored.
-     */
     public final void setEnabled(boolean value) {
         if (this.enabled == value) return;
 
+        // Clean mode blocks restricted modules from enabling
+        if (value && !ClientMode.isModuleAllowed(this)) {
+            NotificationManager.push(name, "Blocked in Clean mode");
+            return;
+        }
+
         boolean previous = this.enabled;
         try {
-            if (value) {
-                onEnable();
-            } else {
-                onDisable();
-            }
+            if (value) onEnable();
+            else onDisable();
             this.enabled = value;
             NotificationManager.pushModule(name, value);
             markConfigDirty();
@@ -74,7 +71,6 @@ public abstract class Module {
         }
     }
 
-    /** Force state without callbacks (used carefully during config load). */
     public final void setEnabledRaw(boolean value) {
         this.enabled = value;
     }
@@ -87,24 +83,18 @@ public abstract class Module {
 
     public void setKey(int key) {
         if (this.key == key) return;
-
-        // Unique binds: clear same key on other modules
         if (key >= 0) {
             ModuleManager mm = ModuleManager.getInstance();
             if (mm != null) {
                 for (Module m : mm.getModules()) {
-                    if (m != this && m.getKey() == key) {
-                        m.key = -1;
-                    }
+                    if (m != this && m.getKey() == key) m.key = -1;
                 }
             }
         }
-
         this.key = key;
         markConfigDirty();
     }
 
-    /** Assign key without side effects (config load). */
     public void setKeyRaw(int key) {
         this.key = key;
     }
@@ -122,9 +112,6 @@ public abstract class Module {
         MISC("Misc");
 
         public final String displayName;
-
-        Category(String displayName) {
-            this.displayName = displayName;
-        }
+        Category(String displayName) { this.displayName = displayName; }
     }
 }

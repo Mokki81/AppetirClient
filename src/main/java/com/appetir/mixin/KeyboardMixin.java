@@ -1,6 +1,7 @@
 package com.appetir.mixin;
 
 import com.appetir.AppetirClient;
+import com.appetir.client.ClientMode;
 import com.appetir.config.ConfigManager;
 import com.appetir.gui.AltManagerScreen;
 import com.appetir.gui.ClickGUI;
@@ -20,16 +21,12 @@ public class KeyboardMixin {
 
     @Inject(method = "onKey", at = @At("HEAD"), cancellable = true)
     private void onKey(long window, int key, int scancode, int action, int modifiers, CallbackInfo ci) {
-        // Track for keystrokes (press + release)
         KeystrokesState.onKey(key, action);
 
         if (action != GLFW.GLFW_PRESS) return;
 
-        // Bind mode has priority
         if (BindManager.isListening()) {
-            if (BindManager.onKey(key)) {
-                ci.cancel();
-            }
+            if (BindManager.onKey(key)) ci.cancel();
             return;
         }
 
@@ -45,8 +42,9 @@ public class KeyboardMixin {
             return;
         }
 
-        // Right Control — Alt Manager
+        // Right Control — Alt Manager (Full mode only)
         if (key == GLFW.GLFW_KEY_RIGHT_CONTROL) {
+            if (ClientMode.isClean()) return;
             if (mc.currentScreen instanceof AltManagerScreen) {
                 mc.setScreen(null);
             } else {
@@ -59,11 +57,16 @@ public class KeyboardMixin {
         if (key == GLFW.GLFW_KEY_RIGHT_ALT) {
             AppetirClient.hudVisible = !AppetirClient.hudVisible;
             ConfigManager cm = ConfigManager.getInstance();
-            if (cm != null) cm.saveQuiet();
+            if (cm != null) cm.markDirty();
             return;
         }
 
-        // Module keybinds
+        // Insert — toggle Clean / Full client mode
+        if (key == GLFW.GLFW_KEY_INSERT) {
+            ClientMode.toggle();
+            return;
+        }
+
         if (mc.currentScreen == null) {
             ModuleManager mm = ModuleManager.getInstance();
             if (mm != null) mm.onKeyPress(key);

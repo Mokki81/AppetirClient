@@ -1,6 +1,7 @@
 package com.appetir.mixin;
 
 import com.appetir.AppetirClient;
+import com.appetir.client.ClientMode;
 import com.appetir.gui.ThemeManager;
 import com.appetir.modules.Module;
 import com.appetir.modules.ModuleManager;
@@ -37,9 +38,9 @@ public class HudOverlay {
         int accent = ThemeManager.getAccentColor();
         int accentDim = ThemeManager.getAccentColor(0.45f);
 
-        // Watermark
-        String name = AppetirClient.NAME;
-        String ver = " v" + AppetirClient.VERSION;
+        // Watermark — Clean mode looks like performance mod
+        String name = ClientMode.brandName();
+        String ver = " " + ClientMode.brandSubtitle();
         mc.textRenderer.drawWithShadow(matrices, name, 5, 5, accent);
         mc.textRenderer.drawWithShadow(matrices, ver, 5 + mc.textRenderer.getWidth(name), 5, 0xFF888899);
         int uw = mc.textRenderer.getWidth(name + ver);
@@ -48,9 +49,10 @@ public class HudOverlay {
         String fps = mc.fpsDebugString.split(" ")[0] + " fps";
         mc.textRenderer.drawWithShadow(matrices, fps, 5, 18, 0xFF777788);
 
-        // Arraylist
+        // Arraylist — only modules allowed in current mode
         List<Module> enabled = mm.getEnabled().stream()
                 .filter(m -> !(m instanceof Keystrokes))
+                .filter(ClientMode::isModuleAllowed)
                 .sorted(Comparator.comparingInt((Module m) -> -mc.textRenderer.getWidth(m.getName())))
                 .collect(Collectors.toList());
 
@@ -74,7 +76,6 @@ public class HudOverlay {
             i++;
         }
 
-        // Keystrokes
         Module ksMod = mm.getByName("Keystrokes");
         if (ksMod instanceof Keystrokes && ksMod.isEnabled()) {
             renderKeystrokes(matrices, mc, (Keystrokes) ksMod, accent, screenH);
@@ -85,23 +86,21 @@ public class HudOverlay {
         int size = ks.getSize();
         int gap = 3;
         int baseX = ks.getX();
-        int baseY = screenH - ks.getY() - size * 3 - gap * 2 - (ks.showSpace() ? size + gap : 0) - (ks.showMouse() ? size + gap : 0);
+        int baseY = screenH - ks.getY() - size * 3 - gap * 2
+                - (ks.showSpace() ? size + gap : 0)
+                - (ks.showMouse() ? size + gap : 0);
 
-        // W
-        drawKey(m, mc, baseX + size + gap, baseY, size, "W", KeystrokesState.w, accent);
-        // A S D
-        drawKey(m, mc, baseX, baseY + size + gap, size, "A", KeystrokesState.a, accent);
-        drawKey(m, mc, baseX + size + gap, baseY + size + gap, size, "S", KeystrokesState.s, accent);
-        drawKey(m, mc, baseX + (size + gap) * 2, baseY + size + gap, size, "D", KeystrokesState.d, accent);
+        drawKey(m, mc, baseX + size + gap, baseY, size, size, "W", KeystrokesState.w, accent);
+        drawKey(m, mc, baseX, baseY + size + gap, size, size, "A", KeystrokesState.a, accent);
+        drawKey(m, mc, baseX + size + gap, baseY + size + gap, size, size, "S", KeystrokesState.s, accent);
+        drawKey(m, mc, baseX + (size + gap) * 2, baseY + size + gap, size, size, "D", KeystrokesState.d, accent);
 
         int row = baseY + (size + gap) * 2;
-
         if (ks.showSpace()) {
             int spaceW = size * 3 + gap * 2;
             drawKey(m, mc, baseX, row, spaceW, size, "SPACE", KeystrokesState.space, accent);
             row += size + gap;
         }
-
         if (ks.showMouse()) {
             int half = (size * 3 + gap * 2 - gap) / 2;
             drawKey(m, mc, baseX, row, half, size, "LMB", KeystrokesState.lmb, accent);
@@ -109,29 +108,21 @@ public class HudOverlay {
         }
     }
 
-    private void drawKey(MatrixStack m, MinecraftClient mc, int x, int y, int s, String label, boolean pressed, int accent) {
-        drawKey(m, mc, x, y, s, s, label, pressed, accent);
-    }
-
-    private void drawKey(MatrixStack m, MinecraftClient mc, int x, int y, int w, int h, String label, boolean pressed, int accent) {
+    private void drawKey(MatrixStack m, MinecraftClient mc, int x, int y, int w, int h,
+                         String label, boolean pressed, int accent) {
         if (pressed) {
             fill(m, x, y, x + w, y + h, ThemeManager.withAlpha(accent, 0.85f));
-            fill(m, x, y, x + w, y + 1, 0x44FFFFFF);
         } else {
             fill(m, x, y, x + w, y + h, 0xAA0A0A14);
-            fill(m, x, y, x + w, y + 1, 0x22FFFFFF);
         }
-        // border
         int border = pressed ? accent : 0x44FFFFFF;
         fill(m, x, y, x + w, y + 1, border);
         fill(m, x, y + h - 1, x + w, y + h, border);
         fill(m, x, y, x + 1, y + h, border);
         fill(m, x + w - 1, y, x + w, y + h, border);
-
         int tw = mc.textRenderer.getWidth(label);
-        int tx = x + (w - tw) / 2;
-        int ty = y + (h - 8) / 2;
-        mc.textRenderer.drawWithShadow(m, label, tx, ty, pressed ? 0xFFFFFFFF : 0xFFAAAAAA);
+        mc.textRenderer.drawWithShadow(m, label, x + (w - tw) / 2, y + (h - 8) / 2,
+                pressed ? 0xFFFFFFFF : 0xFFAAAAAA);
     }
 
     private void fill(MatrixStack m, int x1, int y1, int x2, int y2, int color) {
