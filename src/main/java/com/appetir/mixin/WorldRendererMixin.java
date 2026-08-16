@@ -16,6 +16,7 @@ import net.minecraft.entity.projectile.ArrowEntity;
 import net.minecraft.entity.projectile.thrown.EnderPearlEntity;
 import net.minecraft.entity.projectile.thrown.SnowballEntity;
 import net.minecraft.util.math.Matrix4f;
+import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -49,7 +50,6 @@ public class WorldRendererMixin {
 
         if (esp == null && arrows == null && projectiles == null && !blockOn) return;
 
-        // Camera-relative offset for world draws
         Vec3d cam = camera.getPos();
         matrices.push();
         matrices.translate(-cam.x, -cam.y, -cam.z);
@@ -129,7 +129,6 @@ public class WorldRendererMixin {
         } else if (mode.equals("Outline")) {
             RenderUtil.drawEntityBox(matrices, provider, e, tickDelta, color, false, lw + 0.5f);
         } else {
-            // Box
             RenderUtil.drawEntityBox(matrices, provider, e, tickDelta, color, fill, lw);
         }
     }
