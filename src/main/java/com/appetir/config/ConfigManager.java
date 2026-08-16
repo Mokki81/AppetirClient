@@ -64,7 +64,6 @@ public class ConfigManager {
             String json = new String(Files.readAllBytes(configFile.toPath()), StandardCharsets.UTF_8);
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
             applyRoot(root);
-            dirty = false;
             System.out.println("[Appetir] Config loaded");
         } catch (Exception e) {
             System.err.println("[Appetir] Failed to load config: " + e.getMessage());
@@ -108,6 +107,8 @@ public class ConfigManager {
         ModuleManager mm = ModuleManager.getInstance();
         if (mm == null) return;
 
+        boolean keyDedupe = false;
+
         if (root.has("modules")) {
             JsonObject modules = root.getAsJsonObject("modules");
             Map<Integer, Module> keyOwners = new HashMap<>();
@@ -126,6 +127,7 @@ public class ConfigManager {
                                 System.err.println("[Appetir] Duplicate key " + k + " for "
                                         + mod.getName() + " (kept on " + keyOwners.get(k).getName() + ")");
                                 mod.setKeyRaw(-1);
+                                keyDedupe = true;
                             } else {
                                 mod.setKeyRaw(k);
                                 keyOwners.put(k, mod);
@@ -163,6 +165,12 @@ public class ConfigManager {
         }
 
         mm.rebuildKeyMap();
+
+        if (keyDedupe) {
+            markDirty();
+        } else {
+            dirty = false;
+        }
     }
 
     private void loadSettings(Module mod, JsonObject settingsObj) {

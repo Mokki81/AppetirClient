@@ -18,9 +18,9 @@ public final class FriendManager {
 
     private static volatile FriendManager instance;
 
-    /** Real UUID string → display name */
+    /** Real UUID string → display name (preserves casing) */
     private final Map<String, String> byUuid = new HashMap<>();
-    /** lowercase name → uuid string OR "name:key" for legacy */
+    /** lowercase name → uuid string OR "name:" + original casing for legacy */
     private final Map<String, String> byName = new HashMap<>();
     private final File file;
     private boolean dirty;
@@ -47,33 +47,35 @@ public final class FriendManager {
         String n = name.trim();
         String key = n.toLowerCase(Locale.ROOT);
         if (byName.containsKey(key)) return false;
-        byName.put(key, "name:" + key);
+        // Store original casing after "name:"
+        byName.put(key, "name:" + n);
         markDirty();
         return true;
     }
 
     public boolean add(PlayerEntity player) {
         if (player == null) return false;
-        String uuid = player.getUuid().toString();
-        String name = player.getGameProfile().getName();
-        promoteToUuid(uuid, name);
+        promoteToUuid(player.getUuid().toString(), player.getGameProfile().getName());
         markDirty();
         return true;
     }
 
-    /** Move any legacy name entries for this player under the real UUID. */
     private void promoteToUuid(String uuid, String name) {
         String nameKey = name.toLowerCase(Locale.ROOT);
 
-        // Remove all name keys that pointed at this uuid
         byName.entrySet().removeIf(e -> uuid.equals(e.getValue()));
-
-        // Remove legacy name: entry for this name
         byName.remove(nameKey);
 
-        // Drop any leftover legacy keys that stored the same display name as value under name:
-        byUuid.entrySet().removeIf(e ->
-                e.getKey().startsWith("name:") && name.equalsIgnoreCase(e.getValue()));
+        // If another UUID already owns this name, leave their byUuid but drop name index to newest
+        String previousOwner = null;
+        for (Map.Entry<String, String> e : byUuid.entrySet()) {
+            if (!e.getKey().startsWith("name:") && name.equalsIgnoreCase(e.getValue())
+                    && !e.getKey().equals(uuid)) {
+                previousOwner = e.getKey();
+                break;
+            }
+        }
+        // Prefer newest mapping for byName; keep both UUID entries for isFriend(UUID)
 
         byUuid.put(uuid, name);
         byName.put(nameKey, uuid);
@@ -85,9 +87,7 @@ public final class FriendManager {
         String id = byName.remove(key);
         if (id == null) return false;
 
-        if (id.startsWith("name:")) {
-            // pure legacy
-        } else {
+        if (!id.startsWith("name:")) {
             byUuid.remove(id);
             byName.entrySet().removeIf(e -> id.equals(e.getValue()));
         }
@@ -147,19 +147,17 @@ public final class FriendManager {
         }
     }
 
-    /** Unique display names only (no duplicate legacy + UUID). */
     public Set<String> getFriends() {
         Set<String> names = new HashSet<>();
-        // Prefer UUID entries
         for (Map.Entry<String, String> e : byUuid.entrySet()) {
             if (!e.getKey().startsWith("name:")) {
-                names.add(e.getValue());
+                names.add(e.getValue()); // original casing
             }
         }
-        // Legacy name-only not yet promoted
         for (Map.Entry<String, String> e : byName.entrySet()) {
             if (e.getValue().startsWith("name:")) {
-                names.add(e.getKey()); // stored lowercase — improve: keep original casing if needed
+                // "name:OriginalCasing"
+                names.add(e.getValue().substring(5));
             }
         }
         return Collections.unmodifiableSet(names);
@@ -196,11 +194,11 @@ public final class FriendManager {
                         byName.put(name.toLowerCase(Locale.ROOT), uuid);
                     } catch (IllegalArgumentException e) {
                         String key = line.toLowerCase(Locale.ROOT);
-                        byName.put(key, "name:" + key);
+                        byName.put(key, "name:" + line);
                     }
                 } else {
                     String key = line.toLowerCase(Locale.ROOT);
-                    byName.put(key, "name:" + key);
+                    byName.put(key, "name:" + line); // preserve casing in value
                 }
             }
         } catch (Exception e) {
@@ -224,8 +222,9 @@ public final class FriendManager {
             }
             for (Map.Entry<String, String> e : byName.entrySet()) {
                 if (!e.getValue().startsWith("name:")) continue;
+                String display = e.getValue().substring(5);
                 if (writtenName.add(e.getKey())) {
-                    w.write(e.getKey() + "\n");
+                    w.write(display + "\n");
                 }
             }
         } catch (Exception e) {

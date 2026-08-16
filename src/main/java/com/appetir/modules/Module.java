@@ -58,25 +58,38 @@ public abstract class Module {
         this.enabled = value;
 
         try {
-            if (value) onEnable();
-            else onDisable();
+            if (value) {
+                onEnable();
+            } else {
+                onDisable();
+            }
             NotificationManager.pushModule(name, value);
             markConfigDirty();
         } catch (Exception e) {
-            try {
-                if (value) onDisable();
-                else onEnable();
-            } catch (Exception cleanupEx) {
-                System.err.println("[Appetir] Cleanup after error in " + name + " also failed: "
-                        + cleanupEx.getMessage());
-                cleanupEx.printStackTrace();
+            if (value) {
+                // Failed to enable — try cleanup and stay OFF
+                try {
+                    onDisable();
+                } catch (Exception cleanupEx) {
+                    System.err.println("[Appetir] Cleanup after failed onEnable in " + name + ": "
+                            + cleanupEx.getMessage());
+                    cleanupEx.printStackTrace();
+                }
+                this.enabled = false;
+            } else {
+                // Failed to disable — MUST stay OFF (do not call onEnable)
+                this.enabled = false;
+                System.err.println("[Appetir] onDisable failed for " + name
+                        + " — forced enabled=false");
             }
-            this.enabled = previous;
             System.err.println("[Appetir] Error in module " + name
                     + " (" + e.getClass().getSimpleName() + "): "
                     + (e.getMessage() != null ? e.getMessage() : "(no message)")
-                    + " — state rolled back to " + previous);
+                    + " — previous was " + previous + ", now enabled=" + this.enabled);
             e.printStackTrace();
+            try {
+                markConfigDirty();
+            } catch (Exception ignored) {}
         }
     }
 
@@ -85,8 +98,7 @@ public abstract class Module {
     }
 
     /**
-     * Emergency path after repeated failures: force OFF even if onDisable throws.
-     * Always ends with enabled=false.
+     * Emergency path: force OFF even if onDisable throws.
      */
     public final void forceDisable() {
         try {

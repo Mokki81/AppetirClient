@@ -1,13 +1,14 @@
 package com.appetir.modules.impl;
 
 import com.appetir.modules.Module;
+import com.appetir.util.KeyOwnership;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.item.ItemStack;
 
 public class AutoEat extends Module {
 
     private int cooldown = 0;
-    private boolean holdingUse;
+    private boolean ownedUse;
     private int prevSlot = -1;
     private int foodSlot = -1;
 
@@ -53,8 +54,7 @@ public class AutoEat extends Module {
             if (prevSlot < 0) prevSlot = mc.player.inventory.selectedSlot;
             foodSlot = i;
             mc.player.inventory.selectedSlot = i;
-            mc.options.keyUse.setPressed(true);
-            holdingUse = true;
+            ownedUse = KeyOwnership.pressUseIfFree(mc) || ownedUse;
             cooldown = 32;
             return;
         }
@@ -63,10 +63,9 @@ public class AutoEat extends Module {
     }
 
     private void releaseUse() {
-        if (!holdingUse) return;
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.options != null) mc.options.keyUse.setPressed(false);
-        holdingUse = false;
+        KeyOwnership.releaseUseIfOwned(mc, ownedUse);
+        ownedUse = false;
     }
 
     private void restoreSlot() {
@@ -76,7 +75,6 @@ public class AutoEat extends Module {
             foodSlot = -1;
             return;
         }
-        // Only restore if still on the food slot we switched to
         if (prevSlot >= 0 && foodSlot >= 0 && mc.player.inventory.selectedSlot == foodSlot) {
             mc.player.inventory.selectedSlot = prevSlot;
         }
