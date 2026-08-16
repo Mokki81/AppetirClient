@@ -5,7 +5,6 @@ import org.lwjgl.glfw.GLFW;
 
 /**
  * Global keybind listening state (Neverlose-style).
- * When listening != null, next key press assigns the bind.
  */
 public final class BindManager {
 
@@ -29,19 +28,23 @@ public final class BindManager {
         listening = null;
     }
 
-    /**
-     * @return true if the key was consumed by bind system
-     */
+    /** Keys used by the client itself — cannot be module binds. */
+    public static boolean isReserved(int key) {
+        return key == GLFW.GLFW_KEY_RIGHT_SHIFT
+                || key == GLFW.GLFW_KEY_RIGHT_CONTROL
+                || key == GLFW.GLFW_KEY_RIGHT_ALT
+                || key == GLFW.GLFW_KEY_INSERT
+                || key == GLFW.GLFW_KEY_ESCAPE;
+    }
+
     public static boolean onKey(int key) {
         if (listening == null) return false;
 
-        // ESC — cancel
         if (key == GLFW.GLFW_KEY_ESCAPE) {
             listening = null;
             return true;
         }
 
-        // DEL / BACKSPACE — unbind
         if (key == GLFW.GLFW_KEY_DELETE || key == GLFW.GLFW_KEY_BACKSPACE) {
             listening.setKey(-1);
             NotificationManager.push(listening.getName(), "Unbound");
@@ -49,10 +52,8 @@ public final class BindManager {
             return true;
         }
 
-        // Don't bind reserved keys
-        if (key == GLFW.GLFW_KEY_RIGHT_SHIFT
-                || key == GLFW.GLFW_KEY_RIGHT_CONTROL
-                || key == GLFW.GLFW_KEY_RIGHT_ALT) {
+        if (isReserved(key)) {
+            NotificationManager.push("Bind", "Key reserved by client");
             return true;
         }
 

@@ -21,10 +21,11 @@ public class KillAura extends Module {
 
     private final ModeSetting mode = new ModeSetting("Mode", "Legit or Rage", "Legit", "Legit", "Rage");
     private final NumberSetting range = new NumberSetting("Range", "Attack range", 3.2, 2.0, 6.0, 0.1);
-    private final NumberSetting fov = new NumberSetting("FOV", "Max aim FOV (Legit)", 60, 20, 180, 5);
+    private final NumberSetting fov = new NumberSetting("FOV", "Max aim FOV", 60, 20, 180, 5);
     private final NumberSetting minDelay = new NumberSetting("MinDelay", "Min ticks between hits", 2, 0, 20, 1);
     private final NumberSetting maxDelay = new NumberSetting("MaxDelay", "Max ticks between hits", 5, 0, 20, 1);
     private final NumberSetting aimSpeed = new NumberSetting("AimSpeed", "Soft aim speed", 0.45, 0.1, 1.0, 0.05);
+    private final BooleanSetting moveCamera = new BooleanSetting("MoveCamera", "Rotate player view toward target", true);
     private final BooleanSetting players = new BooleanSetting("Players", "Attack players", true);
     private final BooleanSetting mobs = new BooleanSetting("Mobs", "Attack hostile mobs", false);
     private final BooleanSetting throughWalls = new BooleanSetting("ThroughWalls", "Ignore walls", false);
@@ -42,6 +43,7 @@ public class KillAura extends Module {
         addSetting(minDelay);
         addSetting(maxDelay);
         addSetting(aimSpeed);
+        addSetting(moveCamera);
         addSetting(players);
         addSetting(mobs);
         addSetting(throughWalls);
@@ -73,11 +75,16 @@ public class KillAura extends Module {
         Entity target = findTarget(mc, legit);
         if (target == null) return;
 
-        if (legit) {
-            softLook(mc, target);
-            if (angleTo(mc.player, target) > fov.get()) return;
+        if (moveCamera.get()) {
+            if (legit) {
+                softLook(mc, target);
+                if (angleTo(mc.player, target) > fov.get()) return;
+            } else {
+                hardLook(mc, target);
+            }
         } else {
-            hardLook(mc, target);
+            // No forced rotation — only hit if already looking at target
+            if (angleTo(mc.player, target) > fov.get()) return;
         }
 
         mc.interactionManager.attackEntity(mc.player, target);
@@ -90,9 +97,6 @@ public class KillAura extends Module {
         hitCooldown = min + ThreadLocalRandom.current().nextInt(max - min + 1);
     }
 
-    /**
-     * Real critical-hit window: airborne, falling, not climbing/swimming/flying/blind.
-     */
     private boolean canCritical(MinecraftClient mc) {
         PlayerEntity p = mc.player;
         if (p == null) return false;
@@ -101,7 +105,6 @@ public class KillAura extends Module {
         if (p.isClimbing()) return false;
         if (p.getAbilities().flying) return false;
         if (p.hasVehicle()) return false;
-        // Must be falling (negative Y velocity) — not rising after jump
         return p.getVelocity().y < -0.08;
     }
 
@@ -151,7 +154,7 @@ public class KillAura extends Module {
         double bestScore = Double.MAX_VALUE;
         double maxRange = legit ? Math.min(range.get(), 3.5) : range.get();
         double maxRangeSq = maxRange * maxRange;
-        double maxFov = legit ? fov.get() : 360;
+        double maxFov = (legit || !moveCamera.get()) ? fov.get() : 360;
 
         for (Entity e : mc.world.getEntities()) {
             if (e == mc.player || !(e instanceof LivingEntity)) continue;

@@ -9,7 +9,7 @@ public class NumberSetting extends Setting {
         super(name, description);
         this.min = min;
         this.max = max;
-        this.step = step;
+        this.step = step > 0 ? step : 1.0;
         this.value = clamp(defaultValue);
     }
 
@@ -30,9 +30,18 @@ public class NumberSetting extends Setting {
 
     private double clamp(double v) {
         v = Math.max(min, Math.min(max, v));
-        // snap to step
+        // Snap relative to min so grid is min, min+step, ...
         if (step > 0) {
+            double steps = Math.round((v - min) / step);
+            v = min + steps * step;
+            // floating error guard
+            v = Math.max(min, Math.min(max, v));
+            // avoid ugly 0.30000000004
             v = Math.round(v / step) * step;
+            // re-align to min grid after round
+            steps = Math.round((v - min) / step);
+            v = min + steps * step;
+            v = Math.max(min, Math.min(max, v));
         }
         return v;
     }

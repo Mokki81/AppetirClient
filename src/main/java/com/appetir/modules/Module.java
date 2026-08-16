@@ -3,6 +3,7 @@ package com.appetir.modules;
 import com.appetir.client.ClientMode;
 import com.appetir.config.ConfigManager;
 import com.appetir.settings.Setting;
+import com.appetir.util.BindManager;
 import com.appetir.util.NotificationManager;
 
 import java.util.ArrayList;
@@ -48,7 +49,6 @@ public abstract class Module {
     public final void setEnabled(boolean value) {
         if (this.enabled == value) return;
 
-        // Clean mode blocks restricted modules from enabling
         if (value && !ClientMode.isModuleAllowed(this)) {
             NotificationManager.push(name, "Blocked in Clean mode");
             return;
@@ -82,21 +82,33 @@ public abstract class Module {
     public int getKey() { return key; }
 
     public void setKey(int key) {
+        // Normalize: none / invalid / reserved → -1
+        if (key < 0 || BindManager.isReserved(key)) {
+            key = -1;
+        }
         if (this.key == key) return;
+
         if (key >= 0) {
             ModuleManager mm = ModuleManager.getInstance();
             if (mm != null) {
                 for (Module m : mm.getModules()) {
-                    if (m != this && m.getKey() == key) m.key = -1;
+                    if (m != this && m.getKey() == key) {
+                        m.key = -1;
+                    }
                 }
             }
         }
+
         this.key = key;
         markConfigDirty();
     }
 
-    public void setKeyRaw(int key) {
-        this.key = key;
+    /**
+     * Package-private: only ConfigManager / ModuleManager should use this.
+     * Does not enforce uniqueness — caller must.
+     */
+    void setKeyRaw(int key) {
+        this.key = key < 0 ? -1 : key;
     }
 
     private static void markConfigDirty() {

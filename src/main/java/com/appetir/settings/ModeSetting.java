@@ -1,6 +1,7 @@
 package com.appetir.settings;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class ModeSetting extends Setting {
@@ -10,12 +11,21 @@ public class ModeSetting extends Setting {
 
     public ModeSetting(String name, String description, String defaultMode, String... modes) {
         super(name, description);
-        this.modes = Arrays.asList(modes);
-        this.index = Math.max(0, this.modes.indexOf(defaultMode));
-        if (this.index < 0) this.index = 0;
+        if (modes == null || modes.length == 0) {
+            this.modes = Collections.singletonList(defaultMode != null ? defaultMode : "Default");
+        } else {
+            this.modes = Arrays.asList(modes);
+        }
+        int i = defaultMode != null ? this.modes.indexOf(defaultMode) : -1;
+        this.index = i >= 0 ? i : 0;
     }
 
-    public String get() { return modes.get(index); }
+    public String get() {
+        if (modes.isEmpty()) return "";
+        if (index < 0 || index >= modes.size()) index = 0;
+        return modes.get(index);
+    }
+
     public int getIndex() { return index; }
     public List<String> getModes() { return modes; }
 
@@ -25,6 +35,7 @@ public class ModeSetting extends Setting {
     }
 
     public void cycle() {
+        if (modes.isEmpty()) return;
         index = (index + 1) % modes.size();
     }
 
