@@ -3,7 +3,7 @@ package com.appetir.gui;
 import com.appetir.config.ConfigManager;
 
 /**
- * Premium theme system with animated accents.
+ * Themes + ClickGUI layout styles (Appetir / Catlean-inspired / Compact).
  */
 public class ThemeManager {
 
@@ -17,7 +17,8 @@ public class ThemeManager {
         ICE       ("Ice",        0xFF80D8FF, 0xFF2979FF),
         GOLD      ("Gold",       0xFFFFD700, 0xFFFFA000),
         ROSE      ("Rose",       0xFFFF4D6D, 0xFFFF8FAB),
-        GRADIENT  ("Gradient",   0xFF4DA3FF, 0xFFE040FB);
+        GRADIENT  ("Gradient",   0xFF4DA3FF, 0xFFE040FB),
+        CATLEAN   ("CatLean",    0xFF7C5CFF, 0xFF00E5C0); // purple→cyan inspired
 
         public final String name;
         public final int colorPrimary;
@@ -30,9 +31,25 @@ public class ThemeManager {
         }
     }
 
+    /** ClickGUI layout style */
+    public enum GuiStyle {
+        APPETIR("Appetir", "Sidebar + panel"),
+        CATLEAN("CatLean", "Wide cards, soft glow"),
+        COMPACT("Compact", "Dense list");
+
+        public final String name;
+        public final String desc;
+        GuiStyle(String name, String desc) {
+            this.name = name;
+            this.desc = desc;
+        }
+    }
+
     private static Theme current = Theme.AURORA;
+    private static GuiStyle guiStyle = GuiStyle.APPETIR;
 
     public static Theme getCurrent() { return current; }
+    public static GuiStyle getGuiStyle() { return guiStyle; }
 
     public static void setCurrent(Theme t) {
         if (t != null && t != current) {
@@ -42,6 +59,20 @@ public class ThemeManager {
         }
     }
 
+    public static void setGuiStyle(GuiStyle s) {
+        if (s != null && s != guiStyle) {
+            guiStyle = s;
+            ConfigManager cm = ConfigManager.getInstance();
+            if (cm != null) cm.saveQuiet();
+        }
+    }
+
+    public static void cycleGuiStyle() {
+        GuiStyle[] all = GuiStyle.values();
+        int i = (guiStyle.ordinal() + 1) % all.length;
+        setGuiStyle(all[i]);
+    }
+
     public static int primary() { return current.colorPrimary; }
     public static int secondary() { return current.colorSecondary; }
 
@@ -49,7 +80,6 @@ public class ThemeManager {
         long time = System.currentTimeMillis();
         float t = (time % 3500L) / 3500.0f;
         float wave = t < 0.5f ? t * 2f : 2f - t * 2f;
-        // All themes gently breathe between primary/secondary
         return lerpColor(current.colorPrimary, current.colorSecondary, wave * 0.55f);
     }
 
