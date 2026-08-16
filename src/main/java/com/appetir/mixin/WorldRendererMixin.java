@@ -2,6 +2,7 @@ package com.appetir.mixin;
 
 import com.appetir.friends.FriendManager;
 import com.appetir.gui.ThemeManager;
+import com.appetir.modules.Module;
 import com.appetir.modules.ModuleManager;
 import com.appetir.modules.impl.*;
 import com.appetir.util.RenderUtil;
@@ -41,7 +42,7 @@ public class WorldRendererMixin {
         Projectiles projectiles = null;
         boolean blockOn = false;
 
-        for (var m : mm.getModules()) {
+        for (Module m : mm.getModules()) {
             if (m instanceof ESP && m.isEnabled()) esp = (ESP) m;
             if (m instanceof Arrows && m.isEnabled()) arrows = (Arrows) m;
             if (m instanceof Projectiles && m.isEnabled()) projectiles = (Projectiles) m;
@@ -66,7 +67,7 @@ public class WorldRendererMixin {
 
             double espRangeSq = esp != null ? esp.getRange() * esp.getRange() : 0;
             double arrowsRangeSq = arrows != null ? arrows.getRange() * arrows.getRange() : 0;
-            double projRangeSq = 64 * 64;
+            double projRangeSq = 64.0 * 64.0;
 
             for (Entity e : mc.world.getEntities()) {
                 if (e == mc.player) continue;
@@ -108,7 +109,11 @@ public class WorldRendererMixin {
                 }
             }
 
-            provider.draw(RenderLayer.getLines());
+            try {
+                provider.draw();
+            } catch (Exception ignored) {
+                try { provider.draw(RenderLayer.getLines()); } catch (Exception ignored2) {}
+            }
         } finally {
             RenderSystem.enableDepthTest();
             RenderSystem.enableCull();

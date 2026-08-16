@@ -75,16 +75,16 @@ public class KillAura extends Module {
         Entity target = findTarget(mc, legit);
         if (target == null) return;
 
+        // #32: FOV gate BEFORE soft-aim
+        double initialAngle = angleTo(mc.player, target);
+        if (initialAngle > fov.get()) return;
+
         if (moveCamera.get()) {
             if (legit) {
                 softLook(mc, target);
-                if (angleTo(mc.player, target) > fov.get()) return;
             } else {
                 hardLook(mc, target);
             }
-        } else {
-            // No forced rotation — only hit if already looking at target
-            if (angleTo(mc.player, target) > fov.get()) return;
         }
 
         mc.interactionManager.attackEntity(mc.player, target);

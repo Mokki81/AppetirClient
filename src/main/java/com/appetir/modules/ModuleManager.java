@@ -101,10 +101,9 @@ public final class ModuleManager {
             } catch (Exception e) {
                 System.err.println("[Appetir] Tick error in " + m.getName()
                         + " (" + e.getClass().getSimpleName() + "): "
-                        + (e.getMessage() != null ? e.getMessage() : "(no message)")
-                        + " — forceDisable");
+                        + (e.getMessage() != null ? e.getMessage() : "(no message)"));
                 e.printStackTrace();
-                m.forceDisable();
+                // Soft fail: log only. forceDisable reserved for repeated/fatal via Module itself.
             }
         }
     }

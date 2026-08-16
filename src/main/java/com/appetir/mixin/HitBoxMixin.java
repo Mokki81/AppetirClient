@@ -17,9 +17,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import java.util.Optional;
 import java.util.function.Predicate;
 
-/**
- * Expand hitboxes only for crosshair / projectile entity ray picks — NOT global getBoundingBox.
- */
 @Mixin(ProjectileUtil.class)
 public class HitBoxMixin {
 
@@ -37,7 +34,7 @@ public class HitBoxMixin {
         if (mm == null) return;
 
         HitBox hitBox = null;
-        for (var m : mm.getModules()) {
+        for (com.appetir.modules.Module m : mm.getModules()) {
             if (m instanceof HitBox && m.isEnabled()) {
                 hitBox = (HitBox) m;
                 break;
@@ -51,8 +48,8 @@ public class HitBoxMixin {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.world == null) return;
 
-        // Manual expanded pick: expand each candidate box only for this ray
-        double best = maxDistance;
+        // #28: compare squared distances
+        double best = maxDistance * maxDistance;
         Entity bestEntity = null;
         Vec3d bestHit = null;
 

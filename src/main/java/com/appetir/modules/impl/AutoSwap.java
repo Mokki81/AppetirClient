@@ -2,9 +2,8 @@ package com.appetir.modules.impl;
 
 import com.appetir.modules.Module;
 import com.appetir.settings.NumberSetting;
+import com.appetir.util.Targeting;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.AxeItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.SwordItem;
@@ -31,12 +30,9 @@ public class AutoSwap extends Module {
         double rangeSq = range.get() * range.get();
         boolean enemyNear = false;
         for (var e : mc.world.getEntities()) {
-            if (e == mc.player) continue;
-            if (!(e instanceof LivingEntity)) continue;
-            LivingEntity living = (LivingEntity) e;
-            if (living.isDead() || living.getHealth() <= 0) continue;
-            if (e instanceof PlayerEntity && ((PlayerEntity) e).isSpectator()) continue;
-            if (mc.player.squaredDistanceTo(e) < rangeSq) {
+            if (mc.player.squaredDistanceTo(e) >= rangeSq) continue;
+            // #29: real enemies only (no friends / cows)
+            if (Targeting.isDefaultEnemy(e)) {
                 enemyNear = true;
                 break;
             }
