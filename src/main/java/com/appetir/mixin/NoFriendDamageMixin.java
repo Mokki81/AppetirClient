@@ -1,5 +1,6 @@
 package com.appetir.mixin;
 
+import com.appetir.friends.FriendManager;
 import com.appetir.modules.ModuleManager;
 import com.appetir.modules.impl.NoFriendDamage;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
@@ -18,15 +19,18 @@ public class NoFriendDamageMixin {
         ModuleManager mm = ModuleManager.getInstance();
         if (mm == null) return;
 
-        boolean enabled = mm.getModules().stream()
-            .filter(m -> m instanceof NoFriendDamage)
-            .anyMatch(m -> m.isEnabled());
-
-        if (!enabled) return;
+        NoFriendDamage mod = null;
+        for (var m : mm.getModules()) {
+            if (m instanceof NoFriendDamage) {
+                mod = (NoFriendDamage) m;
+                break;
+            }
+        }
+        if (mod == null || !mod.shouldBlock()) return;
         if (!(target instanceof PlayerEntity)) return;
 
-        String name = ((PlayerEntity) target).getGameProfile().getName();
-        if (NoFriendDamage.isFriend(name)) {
+        FriendManager fm = FriendManager.getInstance();
+        if (fm != null && fm.isFriend((PlayerEntity) target)) {
             ci.cancel();
         }
     }

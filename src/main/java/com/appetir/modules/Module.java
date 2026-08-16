@@ -46,6 +46,10 @@ public abstract class Module {
         setEnabled(!enabled);
     }
 
+    /**
+     * State is set BEFORE callbacks so isEnabled() is correct inside onEnable/onDisable.
+     * On failure: try opposite callback for cleanup, then restore previous state.
+     */
     public final void setEnabled(boolean value) {
         if (this.enabled == value) return;
 
@@ -55,13 +59,23 @@ public abstract class Module {
         }
 
         boolean previous = this.enabled;
+        this.enabled = value;
+
         try {
             if (value) onEnable();
             else onDisable();
-            this.enabled = value;
             NotificationManager.pushModule(name, value);
             markConfigDirty();
         } catch (Exception e) {
+            // Attempt cleanup of partial side effects
+            try {
+                if (value) onDisable();
+                else onEnable();
+            } catch (Exception cleanupEx) {
+                System.err.println("[Appetir] Cleanup after error in " + name + " also failed: "
+                        + cleanupEx.getMessage());
+                cleanupEx.printStackTrace();
+            }
             this.enabled = previous;
             System.err.println("[Appetir] Error in module " + name
                     + " (" + e.getClass().getSimpleName() + "): "
@@ -102,10 +116,7 @@ public abstract class Module {
         markConfigDirty();
     }
 
-    /**
-     * Config-load only. Does not enforce uniqueness — ConfigManager dedupes.
-     * Prefer {@link #setKey(int)} everywhere else.
-     */
+    /** Config-load only. Prefer {@link #setKey(int)} elsewhere. */
     public void setKeyRaw(int key) {
         this.key = key < 0 ? -1 : key;
     }

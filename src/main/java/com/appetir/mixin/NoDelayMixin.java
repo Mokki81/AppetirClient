@@ -4,24 +4,32 @@ import com.appetir.modules.ModuleManager;
 import com.appetir.modules.impl.NoDelay;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/**
+ * Real NoDelay: zero block-breaking cooldown each tick.
+ * (Previously incorrectly modified reach distance.)
+ */
 @Mixin(ClientPlayerInteractionManager.class)
 public class NoDelayMixin {
 
-    @Inject(method = "getReachDistance", at = @At("RETURN"), cancellable = true)
-    private void onGetReach(CallbackInfoReturnable<Float> cir) {
-        // NoDelay также слегка увеличивает дальность взаимодействия
-        if (isEnabled()) cir.setReturnValue(cir.getReturnValue() + 0.5f);
+    @Shadow private int blockBreakingCooldown;
+
+    @Inject(method = "tick", at = @At("HEAD"))
+    private void onTick(CallbackInfo ci) {
+        if (!isEnabled()) return;
+        this.blockBreakingCooldown = 0;
     }
 
     private boolean isEnabled() {
         ModuleManager mm = ModuleManager.getInstance();
         if (mm == null) return false;
-        return mm.getModules().stream()
-            .filter(m -> m instanceof NoDelay)
-            .anyMatch(m -> m.isEnabled());
+        for (var m : mm.getModules()) {
+            if (m instanceof NoDelay && m.isEnabled()) return true;
+        }
+        return false;
     }
 }

@@ -3,6 +3,7 @@ package com.appetir.modules.impl;
 import com.appetir.friends.FriendManager;
 import com.appetir.modules.Module;
 import com.appetir.settings.BooleanSetting;
+import net.minecraft.entity.player.PlayerEntity;
 
 public class NoFriendDamage extends Module {
 
@@ -17,8 +18,14 @@ public class NoFriendDamage extends Module {
         return isEnabled() && attack.get();
     }
 
-    public boolean isFriend(String name) {
+    /** @deprecated use FriendManager.isFriend(PlayerEntity) */
+    public static boolean isFriend(String name) {
         FriendManager fm = FriendManager.getInstance();
         return fm != null && fm.isFriend(name);
+    }
+
+    public boolean isFriendPlayer(PlayerEntity player) {
+        FriendManager fm = FriendManager.getInstance();
+        return fm != null && fm.isFriend(player);
     }
 }

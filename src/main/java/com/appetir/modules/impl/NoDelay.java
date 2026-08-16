@@ -1,12 +1,10 @@
 package com.appetir.modules.impl;
 
 import com.appetir.modules.Module;
-import net.minecraft.client.MinecraftClient;
 
-// NoDelay убирает задержку между использованием предметов.
-// Реализуется через mixin на ClientPlayerInteractionManager.
+/** Removes block-breaking cooldown (see NoDelayMixin). */
 public class NoDelay extends Module {
     public NoDelay() {
-        super("NoDelay", "Убирает задержки", Category.MISC);
+        super("NoDelay", "Убирает кулдаун ломания блоков", Category.MISC);
     }
 }
