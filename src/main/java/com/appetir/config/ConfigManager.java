@@ -56,6 +56,8 @@ public class ConfigManager {
     public void load() {
         if (!configFile.exists()) {
             System.out.println("[Appetir] No config found, using defaults");
+            ModuleManager mm = ModuleManager.getInstance();
+            if (mm != null) mm.rebuildKeyMap();
             return;
         }
         try {
@@ -103,61 +105,64 @@ public class ConfigManager {
             }
         }
 
-        if (!root.has("modules")) return;
-        JsonObject modules = root.getAsJsonObject("modules");
         ModuleManager mm = ModuleManager.getInstance();
         if (mm == null) return;
 
-        Map<Integer, Module> keyOwners = new HashMap<>();
+        if (root.has("modules")) {
+            JsonObject modules = root.getAsJsonObject("modules");
+            Map<Integer, Module> keyOwners = new HashMap<>();
 
-        for (Module mod : mm.getModules()) {
-            if (!modules.has(mod.getName())) continue;
-            JsonObject entry = modules.getAsJsonObject(mod.getName());
-            try {
-                if (entry.has("settings")) {
-                    loadSettings(mod, entry.getAsJsonObject("settings"));
-                }
-                if (entry.has("key")) {
-                    int k = entry.get("key").getAsInt();
-                    if (k >= 0) {
-                        if (keyOwners.containsKey(k)) {
-                            System.err.println("[Appetir] Duplicate key " + k + " for "
-                                    + mod.getName() + " (kept on " + keyOwners.get(k).getName() + ")");
-                            mod.setKeyRaw(-1);
+            for (Module mod : mm.getModules()) {
+                if (!modules.has(mod.getName())) continue;
+                JsonObject entry = modules.getAsJsonObject(mod.getName());
+                try {
+                    if (entry.has("settings")) {
+                        loadSettings(mod, entry.getAsJsonObject("settings"));
+                    }
+                    if (entry.has("key")) {
+                        int k = entry.get("key").getAsInt();
+                        if (k >= 0) {
+                            if (keyOwners.containsKey(k)) {
+                                System.err.println("[Appetir] Duplicate key " + k + " for "
+                                        + mod.getName() + " (kept on " + keyOwners.get(k).getName() + ")");
+                                mod.setKeyRaw(-1);
+                            } else {
+                                mod.setKeyRaw(k);
+                                keyOwners.put(k, mod);
+                            }
                         } else {
-                            mod.setKeyRaw(k);
-                            keyOwners.put(k, mod);
+                            mod.setKeyRaw(-1);
                         }
-                    } else {
-                        mod.setKeyRaw(-1);
                     }
+                } catch (Exception e) {
+                    System.err.println("[Appetir] Config module " + mod.getName() + ": " + e.getMessage());
+                    e.printStackTrace();
                 }
-            } catch (Exception e) {
-                System.err.println("[Appetir] Config module " + mod.getName() + ": " + e.getMessage());
-                e.printStackTrace();
+            }
+
+            for (Module mod : mm.getModules()) {
+                if (!modules.has(mod.getName())) continue;
+                JsonObject entry = modules.getAsJsonObject(mod.getName());
+                try {
+                    if (entry.has("enabled") && entry.get("enabled").getAsBoolean()) {
+                        if (ClientMode.isModuleAllowed(mod)) {
+                            mod.setEnabled(true);
+                        }
+                    }
+                } catch (Exception e) {
+                    System.err.println("[Appetir] Enable " + mod.getName() + ": " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+
+            if (ClientMode.isClean()) {
+                for (Module m : mm.getModules()) {
+                    if (!ClientMode.isModuleAllowed(m) && m.isEnabled()) m.setEnabled(false);
+                }
             }
         }
 
-        for (Module mod : mm.getModules()) {
-            if (!modules.has(mod.getName())) continue;
-            JsonObject entry = modules.getAsJsonObject(mod.getName());
-            try {
-                if (entry.has("enabled") && entry.get("enabled").getAsBoolean()) {
-                    if (ClientMode.isModuleAllowed(mod)) {
-                        mod.setEnabled(true);
-                    }
-                }
-            } catch (Exception e) {
-                System.err.println("[Appetir] Enable " + mod.getName() + ": " + e.getMessage());
-                e.printStackTrace();
-            }
-        }
-
-        if (ClientMode.isClean()) {
-            for (Module m : mm.getModules()) {
-                if (!ClientMode.isModuleAllowed(m) && m.isEnabled()) m.setEnabled(false);
-            }
-        }
+        mm.rebuildKeyMap();
     }
 
     private void loadSettings(Module mod, JsonObject settingsObj) {
@@ -234,7 +239,6 @@ public class ConfigManager {
 
             String json = gson.toJson(root);
 
-            // Atomic write: tmp → flush → bak old → move tmp to final
             try (Writer writer = new OutputStreamWriter(new FileOutputStream(configTmp), StandardCharsets.UTF_8)) {
                 writer.write(json);
                 writer.flush();
@@ -251,7 +255,6 @@ public class ConfigManager {
             Files.move(configTmp.toPath(), configFile.toPath(),
                     StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } catch (Exception e) {
-            // ATOMIC_MOVE may fail on some FS — fallback non-atomic
             try {
                 if (configTmp.exists()) {
                     Files.move(configTmp.toPath(), configFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
