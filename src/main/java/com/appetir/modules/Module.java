@@ -82,7 +82,6 @@ public abstract class Module {
     public int getKey() { return key; }
 
     public void setKey(int key) {
-        // Normalize: none / invalid / reserved → -1
         if (key < 0 || BindManager.isReserved(key)) {
             key = -1;
         }
@@ -104,10 +103,10 @@ public abstract class Module {
     }
 
     /**
-     * Package-private: only ConfigManager / ModuleManager should use this.
-     * Does not enforce uniqueness — caller must.
+     * Config-load only. Does not enforce uniqueness — ConfigManager dedupes.
+     * Prefer {@link #setKey(int)} everywhere else.
      */
-    void setKeyRaw(int key) {
+    public void setKeyRaw(int key) {
         this.key = key < 0 ? -1 : key;
     }
 

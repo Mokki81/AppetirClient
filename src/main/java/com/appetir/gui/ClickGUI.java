@@ -42,6 +42,61 @@ public class ClickGUI extends Screen {
         else selected = Module.Category.RENDER;
     }
 
+    private int contentHeight() {
+        return this.height - TOP * 2 - 36;
+    }
+
+    /** Total pixel height of the module list including expanded settings. */
+    private int measureContentPixels(List<Module> mods) {
+        int h = 0;
+        for (Module mod : mods) {
+            h += ROW_H;
+            if (expanded.contains(mod.getName())) {
+                h += SET_H; // Bind row
+                h += mod.getSettings().size() * SET_H;
+                h += 6;
+            }
+        }
+        return h;
+    }
+
+    /**
+     * Max scroll offset in "module index" units, accounting for expanded rows
+     * and viewport height so the list never empties.
+     */
+    private int getMaxScroll() {
+        List<Module> mods = getFilteredModules();
+        if (mods.isEmpty()) return 0;
+
+        int viewport = contentHeight();
+        int total = measureContentPixels(mods);
+        if (total <= viewport) return 0;
+
+        // Approximate: how many leading module rows we can skip before
+        // remaining content still fills the viewport.
+        int max = 0;
+        for (int skip = 0; skip < mods.size(); skip++) {
+            int remaining = 0;
+            for (int i = skip; i < mods.size(); i++) {
+                Module mod = mods.get(i);
+                remaining += ROW_H;
+                if (expanded.contains(mod.getName())) {
+                    remaining += SET_H + mod.getSettings().size() * SET_H + 6;
+                }
+            }
+            if (remaining <= viewport) {
+                max = Math.max(0, skip);
+                break;
+            }
+            max = skip;
+        }
+        return max;
+    }
+
+    private void clampScroll() {
+        scroll = Math.max(0, Math.min(scroll, getMaxScroll()));
+    }
+
     @Override
     public void render(MatrixStack m, int mx, int my, float delta) {
         clampScroll();
@@ -134,7 +189,7 @@ public class ClickGUI extends Screen {
 
     private void renderModules(MatrixStack m, int mx, int my, int px, int accent) {
         List<Module> mods = getFilteredModules();
-        int contentH = this.height - TOP * 2 - 36;
+        int contentH = contentHeight();
         int y = TOP + 28;
         int skipped = 0;
 
@@ -280,17 +335,6 @@ public class ClickGUI extends Screen {
         return out;
     }
 
-    /** Max scroll index so at least one module row remains visible. */
-    private int getMaxScroll() {
-        int count = getFilteredModules().size();
-        if (count <= 0) return 0;
-        return Math.max(0, count - 1);
-    }
-
-    private void clampScroll() {
-        scroll = Math.max(0, Math.min(scroll, getMaxScroll()));
-    }
-
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
         if (BindManager.isListening()) return true;
@@ -345,7 +389,7 @@ public class ClickGUI extends Screen {
         }
 
         List<Module> mods = getFilteredModules();
-        int contentH = this.height - TOP * 2 - 36;
+        int contentH = contentHeight();
         int y = TOP + 28;
         int skipped = 0;
 
@@ -357,6 +401,7 @@ public class ClickGUI extends Screen {
                 if (button == 1) {
                     if (expanded.contains(mod.getName())) expanded.remove(mod.getName());
                     else expanded.add(mod.getName());
+                    clampScroll();
                 } else if (button == 0) {
                     mod.toggle();
                 }
