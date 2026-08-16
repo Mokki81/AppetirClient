@@ -17,10 +17,6 @@ import net.minecraft.util.math.Vec3d;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-/**
- * KillAura with Legit / Rage profiles.
- * Legit: FOV gate, randomized delays, soft aim — less robotic.
- */
 public class KillAura extends Module {
 
     private final ModeSetting mode = new ModeSetting("Mode", "Legit or Rage", "Legit", "Legit", "Rage");
@@ -33,11 +29,10 @@ public class KillAura extends Module {
     private final BooleanSetting mobs = new BooleanSetting("Mobs", "Attack hostile mobs", false);
     private final BooleanSetting throughWalls = new BooleanSetting("ThroughWalls", "Ignore walls", false);
     private final BooleanSetting swing = new BooleanSetting("Swing", "Swing hand", true);
-    private final BooleanSetting onlyCriticals = new BooleanSetting("OnlyCrits", "Prefer falling hits", false);
+    private final BooleanSetting onlyCriticals = new BooleanSetting("OnlyCrits", "Only when falling (real crit)", false);
     private final ModeSetting priority = new ModeSetting("Priority", "Target priority", "Distance", "Distance", "Health");
 
     private int hitCooldown = 0;
-    private int nextDelay = 3;
 
     public KillAura() {
         super("KillAura", "Атакует ближайшего врага", Category.COMBAT);
@@ -69,22 +64,17 @@ public class KillAura extends Module {
 
         boolean legit = mode.is("Legit");
 
-        // Cooldown gate — always respect vanilla attack cooldown a bit
         float cd = mc.player.getAttackCooldownProgress(0.5f);
         if (legit && cd < 0.9f) return;
         if (!legit && cd < 0.85f) return;
 
+        if (onlyCriticals.get() && !canCritical(mc)) return;
+
         Entity target = findTarget(mc, legit);
         if (target == null) return;
 
-        if (onlyCriticals.get() && mc.player.isOnGround() && !mc.options.keyJump.isPressed()) {
-            // wait for jump/fall for crits
-            return;
-        }
-
         if (legit) {
             softLook(mc, target);
-            // Must still be roughly looking at target after soft aim
             if (angleTo(mc.player, target) > fov.get()) return;
         } else {
             hardLook(mc, target);
@@ -97,8 +87,22 @@ public class KillAura extends Module {
 
         int min = Math.min(minDelay.getInt(), maxDelay.getInt());
         int max = Math.max(minDelay.getInt(), maxDelay.getInt());
-        nextDelay = min + ThreadLocalRandom.current().nextInt(max - min + 1);
-        hitCooldown = nextDelay;
+        hitCooldown = min + ThreadLocalRandom.current().nextInt(max - min + 1);
+    }
+
+    /**
+     * Real critical-hit window: airborne, falling, not climbing/swimming/flying/blind.
+     */
+    private boolean canCritical(MinecraftClient mc) {
+        PlayerEntity p = mc.player;
+        if (p == null) return false;
+        if (p.isOnGround()) return false;
+        if (p.isTouchingWater() || p.isSubmergedInWater()) return false;
+        if (p.isClimbing()) return false;
+        if (p.getAbilities().flying) return false;
+        if (p.hasVehicle()) return false;
+        // Must be falling (negative Y velocity) — not rising after jump
+        return p.getVelocity().y < -0.08;
     }
 
     private void softLook(MinecraftClient mc, Entity target) {
@@ -111,7 +115,6 @@ public class KillAura extends Module {
         float targetPitch = (float) (-(MathHelper.atan2(diff.y, dist) * (180.0 / Math.PI)));
 
         float speed = aimSpeed.getFloat();
-        // slight human noise
         float noise = (ThreadLocalRandom.current().nextFloat() - 0.5f) * 1.2f;
 
         mc.player.yaw = lerpAngle(mc.player.yaw, targetYaw + noise, speed);

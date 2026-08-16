@@ -5,9 +5,14 @@ import com.appetir.modules.Module;
 import com.appetir.modules.ModuleManager;
 import com.appetir.util.NotificationManager;
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
+
 /**
- * Clean = looks like a performance / QOL client (combat & movement cheats hidden + forced off).
- * Full  = all modules visible.
+ * Clean = explicit QOL whitelist only (performance-mod look).
+ * Full  = everything.
  */
 public final class ClientMode {
 
@@ -24,21 +29,43 @@ public final class ClientMode {
         }
     }
 
+    /** Explicit whitelist for Clean mode — everything else is blocked. */
+    private static final Set<String> CLEAN_WHITELIST;
+
+    static {
+        Set<String> s = new HashSet<>();
+        // Render / visual QOL
+        s.add("fullbright");
+        s.add("nightvision");
+        s.add("hud");
+        s.add("keystrokes");
+        s.add("norender");
+        s.add("itemphysic");
+        s.add("particles");
+        s.add("worldparticles");
+        s.add("aspectratio");
+        s.add("customhand");
+        s.add("glasshands");
+        s.add("cosmetics");
+        s.add("customworld");
+        s.add("nametags");
+        s.add("shulkerviewer");
+        // Misc QOL
+        s.add("optimization");
+        s.add("clientsounds");
+        s.add("itemscroller");
+        s.add("antiafk");
+        s.add("autoaccept");
+        CLEAN_WHITELIST = Collections.unmodifiableSet(s);
+    }
+
     private static Mode current = Mode.FULL;
 
     private ClientMode() {}
 
-    public static Mode get() {
-        return current;
-    }
-
-    public static boolean isClean() {
-        return current == Mode.CLEAN;
-    }
-
-    public static boolean isFull() {
-        return current == Mode.FULL;
-    }
+    public static Mode get() { return current; }
+    public static boolean isClean() { return current == Mode.CLEAN; }
+    public static boolean isFull() { return current == Mode.FULL; }
 
     public static void set(Mode mode) {
         if (mode == null || mode == current) return;
@@ -63,27 +90,17 @@ public final class ClientMode {
         if (mode != null) current = mode;
     }
 
-    /** Categories hidden in Clean mode */
     public static boolean isCategoryVisible(Module.Category cat) {
         if (isFull()) return true;
+        // In Clean only show categories that can contain whitelist modules
         return cat == Module.Category.RENDER
                 || cat == Module.Category.MISC
                 || cat == Module.Category.WORLD;
     }
 
-    /** Modules that stay allowed in Clean (QOL / visual / utility). */
     public static boolean isModuleAllowed(Module mod) {
         if (isFull()) return true;
-        if (mod.getCategory() == Module.Category.COMBAT) return false;
-        if (mod.getCategory() == Module.Category.MOVEMENT) return false;
-
-        // Misc exceptions that look "cheat-y"
-        String n = mod.getName();
-        if (n.equalsIgnoreCase("FreeCamera")) return false;
-        if (n.equalsIgnoreCase("TapeMouse")) return false;
-        if (n.equalsIgnoreCase("AirStuck")) return false;
-
-        return true;
+        return CLEAN_WHITELIST.contains(mod.getName().toLowerCase(Locale.ROOT));
     }
 
     private static void forceDisableRestricted() {
@@ -97,7 +114,7 @@ public final class ClientMode {
     }
 
     public static String brandName() {
-        return isClean() ? "Appetir" : "Appetir";
+        return "Appetir";
     }
 
     public static String brandSubtitle() {

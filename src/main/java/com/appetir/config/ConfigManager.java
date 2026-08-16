@@ -5,8 +5,13 @@ import com.appetir.client.ClientMode;
 import com.appetir.gui.ThemeManager;
 import com.appetir.modules.Module;
 import com.appetir.modules.ModuleManager;
+import com.appetir.settings.BooleanSetting;
+import com.appetir.settings.ModeSetting;
+import com.appetir.settings.NumberSetting;
+import com.appetir.settings.Setting;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.client.MinecraftClient;
@@ -17,6 +22,8 @@ import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.HashMap;
+import java.util.Map;
 
 public class ConfigManager {
 
@@ -74,14 +81,30 @@ public class ConfigManager {
                 JsonObject modules = root.getAsJsonObject("modules");
                 ModuleManager mm = ModuleManager.getInstance();
                 if (mm != null) {
+                    // First pass: keys + settings (no enable yet)
+                    Map<Integer, Module> keyOwners = new HashMap<>();
+
                     for (Module mod : mm.getModules()) {
                         if (!modules.has(mod.getName())) continue;
                         JsonObject entry = modules.getAsJsonObject(mod.getName());
                         try {
-                            if (entry.has("key")) mod.setKeyRaw(entry.get("key").getAsInt());
-                            if (entry.has("enabled") && entry.get("enabled").getAsBoolean()) {
-                                if (ClientMode.isModuleAllowed(mod)) {
-                                    mod.setEnabled(true);
+                            if (entry.has("settings")) {
+                                loadSettings(mod, entry.getAsJsonObject("settings"));
+                            }
+                            if (entry.has("key")) {
+                                int k = entry.get("key").getAsInt();
+                                if (k >= 0) {
+                                    // First module in registry order keeps the key; later duplicates cleared
+                                    if (keyOwners.containsKey(k)) {
+                                        System.err.println("[Appetir] Duplicate key " + k + " for "
+                                                + mod.getName() + " (kept on " + keyOwners.get(k).getName() + ")");
+                                        mod.setKeyRaw(-1);
+                                    } else {
+                                        mod.setKeyRaw(k);
+                                        keyOwners.put(k, mod);
+                                    }
+                                } else {
+                                    mod.setKeyRaw(-1);
                                 }
                             }
                         } catch (Exception e) {
@@ -89,11 +112,26 @@ public class ConfigManager {
                             e.printStackTrace();
                         }
                     }
+
+                    // Second pass: enable (respects ClientMode)
+                    for (Module mod : mm.getModules()) {
+                        if (!modules.has(mod.getName())) continue;
+                        JsonObject entry = modules.getAsJsonObject(mod.getName());
+                        try {
+                            if (entry.has("enabled") && entry.get("enabled").getAsBoolean()) {
+                                if (ClientMode.isModuleAllowed(mod)) {
+                                    mod.setEnabled(true);
+                                }
+                            }
+                        } catch (Exception e) {
+                            System.err.println("[Appetir] Enable " + mod.getName() + ": " + e.getMessage());
+                            e.printStackTrace();
+                        }
+                    }
                 }
             }
 
             if (ClientMode.isClean()) {
-                // ensure restricted stay off after load
                 ModuleManager mm = ModuleManager.getInstance();
                 if (mm != null) {
                     for (Module m : mm.getModules()) {
@@ -110,11 +148,29 @@ public class ConfigManager {
         }
     }
 
-    public void markDirty() {
-        if (!dirty) {
-            dirty = true;
-            dirtySince = System.currentTimeMillis();
+    private void loadSettings(Module mod, JsonObject settingsObj) {
+        for (Setting s : mod.getSettings()) {
+            if (!settingsObj.has(s.getName())) continue;
+            JsonElement el = settingsObj.get(s.getName());
+            try {
+                if (s instanceof BooleanSetting) {
+                    ((BooleanSetting) s).set(el.getAsBoolean());
+                } else if (s instanceof NumberSetting) {
+                    ((NumberSetting) s).set(el.getAsDouble());
+                } else if (s instanceof ModeSetting) {
+                    ((ModeSetting) s).set(el.getAsString());
+                }
+            } catch (Exception e) {
+                System.err.println("[Appetir] Bad setting " + mod.getName() + "." + s.getName()
+                        + ": " + e.getMessage());
+            }
         }
+    }
+
+    /** True debounce: every change resets the timer. */
+    public void markDirty() {
+        dirty = true;
+        dirtySince = System.currentTimeMillis();
     }
 
     public void flushDirty() {
@@ -146,6 +202,20 @@ public class ConfigManager {
                     JsonObject entry = new JsonObject();
                     entry.addProperty("enabled", mod.isEnabled());
                     entry.addProperty("key", mod.getKey());
+
+                    if (mod.hasSettings()) {
+                        JsonObject settings = new JsonObject();
+                        for (Setting s : mod.getSettings()) {
+                            if (s instanceof BooleanSetting) {
+                                settings.addProperty(s.getName(), ((BooleanSetting) s).get());
+                            } else if (s instanceof NumberSetting) {
+                                settings.addProperty(s.getName(), ((NumberSetting) s).get());
+                            } else if (s instanceof ModeSetting) {
+                                settings.addProperty(s.getName(), ((ModeSetting) s).get());
+                            }
+                        }
+                        entry.add("settings", settings);
+                    }
                     modules.add(mod.getName(), entry);
                 }
             }
