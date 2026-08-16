@@ -1,6 +1,5 @@
 package com.appetir.gui;
 
-import com.appetir.AppetirClient;
 import com.appetir.client.ClientMode;
 import com.appetir.config.ConfigManager;
 import com.appetir.modules.Module;
@@ -39,13 +38,14 @@ public class ClickGUI extends Screen {
 
     public ClickGUI() {
         super(new LiteralText("Appetir"));
-        // Default category based on mode
         if (ClientMode.isFull()) selected = Module.Category.COMBAT;
         else selected = Module.Category.RENDER;
     }
 
     @Override
     public void render(MatrixStack m, int mx, int my, float delta) {
+        clampScroll();
+
         int H = this.height;
         int accent = ThemeManager.getAccentColor();
         int accentSoft = ThemeManager.getAccentColor(0.25f);
@@ -88,7 +88,6 @@ public class ClickGUI extends Screen {
             cy += CAT_H;
         }
 
-        // Client mode toggle at bottom of sidebar
         int modeY = TOP + sideH - 36;
         boolean modeHov = hovered(mx, my, sx + 6, modeY, sx + SIDEBAR_W - 6, modeY + 18);
         fill(m, sx + 6, modeY, sx + SIDEBAR_W - 6, modeY + 18,
@@ -281,6 +280,17 @@ public class ClickGUI extends Screen {
         return out;
     }
 
+    /** Max scroll index so at least one module row remains visible. */
+    private int getMaxScroll() {
+        int count = getFilteredModules().size();
+        if (count <= 0) return 0;
+        return Math.max(0, count - 1);
+    }
+
+    private void clampScroll() {
+        scroll = Math.max(0, Math.min(scroll, getMaxScroll()));
+    }
+
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
         if (BindManager.isListening()) return true;
@@ -290,13 +300,13 @@ public class ClickGUI extends Screen {
         int sy = TOP + 50;
         int sideH = this.height - TOP * 2;
 
-        // Mode toggle
         int modeY = TOP + sideH - 36;
         if (hovered((int) mx, (int) my, sx + 6, modeY, sx + SIDEBAR_W - 6, modeY + 18) && button == 0) {
             ClientMode.toggle();
             if (ClientMode.isClean() && (selected == Module.Category.COMBAT || selected == Module.Category.MOVEMENT))
                 selected = Module.Category.RENDER;
             expanded.clear();
+            scroll = 0;
             return true;
         }
 
@@ -386,7 +396,8 @@ public class ClickGUI extends Screen {
 
     @Override
     public boolean mouseScrolled(double mx, double my, double amount) {
-        scroll = Math.max(0, scroll - (int) amount);
+        scroll = scroll - (int) amount;
+        clampScroll();
         return true;
     }
 
