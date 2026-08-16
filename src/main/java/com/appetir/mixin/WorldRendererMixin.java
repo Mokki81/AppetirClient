@@ -49,6 +49,11 @@ public class WorldRendererMixin {
 
         if (esp == null && arrows == null && projectiles == null && !blockOn) return;
 
+        // Camera-relative offset for world draws
+        Vec3d cam = camera.getPos();
+        matrices.push();
+        matrices.translate(-cam.x, -cam.y, -cam.z);
+
         VertexConsumerProvider.Immediate provider = mc.getBufferBuilders().getEntityVertexConsumers();
         RenderSystem.disableDepthTest();
         RenderSystem.disableCull();
@@ -74,18 +79,16 @@ public class WorldRendererMixin {
                                     && FriendManager.getInstance().isFriendReadOnly((PlayerEntity) e);
                             if (!(isFriend && !esp.showFriends())) {
                                 int c = isFriend ? friendColor : enemyColor;
-                                RenderUtil.drawEntityBox(matrices, provider, e, tickDelta, c);
+                                renderEspEntity(matrices, provider, e, tickDelta, c, esp);
                             }
                         }
                     } else if (e instanceof HostileEntity && esp.showMobs()) {
-                        RenderUtil.drawEntityBox(matrices, provider, e, tickDelta, mobColor);
+                        renderEspEntity(matrices, provider, e, tickDelta, mobColor, esp);
                     }
                 }
 
-                if (arrows != null && distSq <= arrowsRangeSq) {
-                    if (e instanceof PlayerEntity) {
-                        RenderUtil.drawLine(matrices, provider, e.getX(), e.getEyeY(), e.getZ(), 0xBBFFFF00);
-                    }
+                if (arrows != null && distSq <= arrowsRangeSq && e instanceof PlayerEntity) {
+                    RenderUtil.drawLine(matrices, provider, e.getX(), e.getEyeY(), e.getZ(), 0xBBFFFF00);
                 }
 
                 if (projectiles != null && distSq <= projRangeSq) {
@@ -94,7 +97,7 @@ public class WorldRendererMixin {
                     else if (e instanceof EnderPearlEntity && projectiles.showPearls()) draw = true;
                     else if (e instanceof SnowballEntity && projectiles.showSnowballs()) draw = true;
                     if (draw) {
-                        RenderUtil.drawEntityBox(matrices, provider, e, tickDelta, projColor);
+                        RenderUtil.drawEntityBox(matrices, provider, e, tickDelta, projColor, false, 1.2f);
                     }
                 }
             }
@@ -109,6 +112,25 @@ public class WorldRendererMixin {
         } finally {
             RenderSystem.enableDepthTest();
             RenderSystem.enableCull();
+            matrices.pop();
+        }
+    }
+
+    private static void renderEspEntity(MatrixStack matrices, VertexConsumerProvider provider,
+                                        Entity e, float tickDelta, int color, ESP esp) {
+        String mode = esp.getMode();
+        float lw = esp.getLineWidth();
+        boolean fill = esp.showFill() || mode.equals("Chams");
+
+        if (mode.equals("Skeleton")) {
+            RenderUtil.drawSkeleton(matrices, e, tickDelta, color);
+        } else if (mode.equals("Chams")) {
+            RenderUtil.drawEntityBox(matrices, provider, e, tickDelta, color, true, lw);
+        } else if (mode.equals("Outline")) {
+            RenderUtil.drawEntityBox(matrices, provider, e, tickDelta, color, false, lw + 0.5f);
+        } else {
+            // Box
+            RenderUtil.drawEntityBox(matrices, provider, e, tickDelta, color, fill, lw);
         }
     }
 }

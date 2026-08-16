@@ -109,6 +109,14 @@ public class ConfigManager {
             }
         }
 
+        if (root.has("guiStyle")) {
+            try {
+                ThemeManager.setGuiStyle(ThemeManager.GuiStyle.valueOf(root.get("guiStyle").getAsString()));
+            } catch (IllegalArgumentException e) {
+                System.err.println("[Appetir] Unknown guiStyle: " + root.get("guiStyle").getAsString());
+            }
+        }
+
         ModuleManager mm = ModuleManager.getInstance();
         if (mm == null) return false;
 
@@ -127,13 +135,9 @@ public class ConfigManager {
                         int k = entry.get("key").getAsInt();
                         if (k >= 0) {
                             if (BindManager.isReserved(k)) {
-                                System.err.println("[Appetir] Reserved key " + k + " for "
-                                        + mod.getName() + " — cleared");
                                 mod.setKeyRaw(-1);
                                 changed = true;
                             } else if (keyOwners.containsKey(k)) {
-                                System.err.println("[Appetir] Duplicate key " + k + " for "
-                                        + mod.getName() + " (kept on " + keyOwners.get(k).getName() + ")");
                                 mod.setKeyRaw(-1);
                                 changed = true;
                             } else {
@@ -203,17 +207,13 @@ public class ConfigManager {
     public void flushDirty() {
         if (!dirty) return;
         if (System.currentTimeMillis() - dirtySince < DEBOUNCE_MS) return;
-        if (save()) {
-            dirty = false;
-        }
-        // on failure dirty stays true → retry next flush
+        if (save()) dirty = false;
     }
 
     public void saveNow() {
         if (save()) dirty = false;
     }
 
-    /** @return true if write succeeded */
     public boolean save() {
         try {
             if (!configDir.exists() && !configDir.mkdirs()) return false;
@@ -223,6 +223,7 @@ public class ConfigManager {
             root.addProperty("hudVisible", AppetirClient.hudVisible);
             root.addProperty("clientMode", ClientMode.get().name());
             root.addProperty("theme", ThemeManager.getCurrent().name());
+            root.addProperty("guiStyle", ThemeManager.getGuiStyle().name());
 
             JsonObject modules = new JsonObject();
             ModuleManager mm = ModuleManager.getInstance();
