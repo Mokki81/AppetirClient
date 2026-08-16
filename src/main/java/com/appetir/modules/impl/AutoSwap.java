@@ -1,27 +1,54 @@
 package com.appetir.modules.impl;
 
 import com.appetir.modules.Module;
+import com.appetir.settings.NumberSetting;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.AxeItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.SwordItem;
 
 public class AutoSwap extends Module {
-    public AutoSwap() { super("AutoSwap","По кнопке меняет предметы в руках",Category.COMBAT); }
+
+    private final NumberSetting range = new NumberSetting("Range", "Enemy detect range", 5, 2, 12, 0.5);
+    private int cooldown = 0;
+
+    public AutoSwap() {
+        super("AutoSwap", "Авто смена на меч/топор рядом с врагом", Category.COMBAT);
+        addSetting(range);
+    }
 
     @Override
     public void onTick() {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player==null||mc.world==null) return;
+        if (mc.player == null || mc.world == null) return;
+        if (cooldown > 0) { cooldown--; return; }
+
         ItemStack held = mc.player.getMainHandStack();
-        if (held.getItem() instanceof SwordItem||held.getItem() instanceof AxeItem) return;
-        boolean enemyNear = mc.world.getEntities().stream()
-            .filter(e->e!=mc.player).anyMatch(e->mc.player.squaredDistanceTo(e)<25.0);
+        if (held.getItem() instanceof SwordItem || held.getItem() instanceof AxeItem) return;
+
+        double rangeSq = range.get() * range.get();
+        boolean enemyNear = false;
+        for (var e : mc.world.getEntities()) {
+            if (e == mc.player) continue;
+            if (!(e instanceof LivingEntity)) continue;
+            LivingEntity living = (LivingEntity) e;
+            if (living.isDead() || living.getHealth() <= 0) continue;
+            if (e instanceof PlayerEntity && ((PlayerEntity) e).isSpectator()) continue;
+            if (mc.player.squaredDistanceTo(e) < rangeSq) {
+                enemyNear = true;
+                break;
+            }
+        }
         if (!enemyNear) return;
-        for (int i=0;i<9;i++) {
+
+        for (int i = 0; i < 9; i++) {
             ItemStack s = mc.player.inventory.getStack(i);
-            if (s.getItem() instanceof SwordItem||s.getItem() instanceof AxeItem) {
-                mc.player.inventory.selectedSlot=i; return;
+            if (s.getItem() instanceof SwordItem || s.getItem() instanceof AxeItem) {
+                mc.player.inventory.selectedSlot = i;
+                cooldown = 5;
+                return;
             }
         }
     }

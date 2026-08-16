@@ -2,32 +2,22 @@ package com.appetir.mixin;
 
 import com.appetir.modules.ModuleManager;
 import com.appetir.modules.impl.NoSlow;
-import net.minecraft.client.input.Input;
 import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.util.math.MathHelper;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.Constant;
+import org.spongepowered.asm.mixin.injection.ModifyConstant;
 
 /**
- * Undo item-use movement slowdown after the full tickMovement pass.
- * Clamp after scale so we never produce >1.0 input spikes.
+ * Replace vanilla item-use slowdown constant (0.2) with 1.0 when NoSlow Items is on.
+ * Applied at the actual multiply site — before movement uses the input.
  */
 @Mixin(ClientPlayerEntity.class)
 public class NoSlowMixin {
 
-    @Inject(method = "tickMovement", at = @At("TAIL"))
-    private void onTickMovementTail(CallbackInfo ci) {
-        if (!isNoSlowItems()) return;
-
-        ClientPlayerEntity player = (ClientPlayerEntity) (Object) this;
-        if (!player.isUsingItem()) return;
-
-        Input input = player.input;
-        // Vanilla applies ~0.2 while using an item; restore and clamp to legal range.
-        input.movementSideways = MathHelper.clamp(input.movementSideways * 5.0f, -1.0f, 1.0f);
-        input.movementForward = MathHelper.clamp(input.movementForward * 5.0f, -1.0f, 1.0f);
+    @ModifyConstant(method = "tickMovement", constant = @Constant(floatValue = 0.2F))
+    private float appetir$noItemSlow(float original) {
+        if (isNoSlowItems()) return 1.0F;
+        return original;
     }
 
     private boolean isNoSlowItems() {

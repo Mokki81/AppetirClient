@@ -14,21 +14,21 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * Friends by UUID (primary) + name for display / offline fallback.
- * File format: uuid:name  OR  name (legacy)
- */
-public class FriendManager {
+public final class FriendManager {
 
-    private static FriendManager instance;
+    private static volatile FriendManager instance;
 
-    /** uuid string → last known name */
     private final Map<String, String> byUuid = new HashMap<>();
-    /** lowercase name → uuid (or name key if uuid unknown) */
     private final Map<String, String> byName = new HashMap<>();
     private final File file;
+    private boolean dirty;
+    private long dirtySince;
+    private static final long SAVE_DEBOUNCE_MS = 500L;
 
     public FriendManager() {
+        if (instance != null) {
+            throw new IllegalStateException("[Appetir] FriendManager already constructed");
+        }
         instance = this;
         File dir = new File(MinecraftClient.getInstance().runDirectory, "appetir");
         if (!dir.exists()) dir.mkdirs();
@@ -45,9 +45,9 @@ public class FriendManager {
         String n = name.trim();
         String key = n.toLowerCase(Locale.ROOT);
         if (byName.containsKey(key)) return false;
-        byName.put(key, key); // name-only until we see the player
+        byName.put(key, "name:" + key);
         byUuid.put("name:" + key, n);
-        save();
+        markDirty();
         return true;
     }
 
@@ -55,22 +55,32 @@ public class FriendManager {
         if (player == null) return false;
         String uuid = player.getUuid().toString();
         String name = player.getGameProfile().getName();
+        String nameKey = name.toLowerCase(Locale.ROOT);
+
+        // Drop any previous name keys pointing at this uuid
+        byName.entrySet().removeIf(e -> uuid.equals(e.getValue()));
+        byUuid.remove("name:" + nameKey);
+
         byUuid.put(uuid, name);
-        byName.put(name.toLowerCase(Locale.ROOT), uuid);
-        // drop legacy name-only entry if any
-        byUuid.remove("name:" + name.toLowerCase(Locale.ROOT));
-        save();
+        byName.put(nameKey, uuid);
+        markDirty();
         return true;
     }
 
     public boolean remove(String name) {
         if (name == null) return false;
         String key = name.trim().toLowerCase(Locale.ROOT);
-        String uuid = byName.remove(key);
-        if (uuid == null) return false;
-        byUuid.remove(uuid);
+        String id = byName.remove(key);
+        if (id == null) return false;
+
+        byUuid.remove(id);
         byUuid.remove("name:" + key);
-        save();
+
+        // Also strip any other names that pointed at same uuid
+        if (!id.startsWith("name:")) {
+            byName.entrySet().removeIf(e -> id.equals(e.getValue()));
+        }
+        markDirty();
         return true;
     }
 
@@ -82,15 +92,27 @@ public class FriendManager {
         if (player == null) return false;
         String uuid = player.getUuid().toString();
         if (byUuid.containsKey(uuid)) {
-            // refresh name
-            byUuid.put(uuid, player.getGameProfile().getName());
-            byName.put(player.getGameProfile().getName().toLowerCase(Locale.ROOT), uuid);
+            String newName = player.getGameProfile().getName();
+            String oldName = byUuid.get(uuid);
+            if (oldName == null || !oldName.equals(newName)) {
+                // Rename: remove old name mapping, keep uuid
+                if (oldName != null) {
+                    byName.remove(oldName.toLowerCase(Locale.ROOT));
+                }
+                byUuid.put(uuid, newName);
+                byName.put(newName.toLowerCase(Locale.ROOT), uuid);
+                markDirty();
+            }
             return true;
         }
-        // legacy name match → upgrade to UUID
         String name = player.getGameProfile().getName();
         if (isFriend(name)) {
-            add(player);
+            // Upgrade legacy name-only entry without immediate disk spam
+            byUuid.remove("name:" + name.toLowerCase(Locale.ROOT));
+            byName.remove(name.toLowerCase(Locale.ROOT));
+            byUuid.put(uuid, name);
+            byName.put(name.toLowerCase(Locale.ROOT), uuid);
+            markDirty();
             return true;
         }
         return false;
@@ -114,12 +136,22 @@ public class FriendManager {
     }
 
     public Set<String> getFriends() {
-        // display names
         Set<String> names = new HashSet<>();
-        for (Map.Entry<String, String> e : byUuid.entrySet()) {
-            names.add(e.getValue());
-        }
+        for (String v : byUuid.values()) names.add(v);
         return Collections.unmodifiableSet(names);
+    }
+
+    /** Call from client tick to flush debounced saves. */
+    public void flushDirty() {
+        if (!dirty) return;
+        if (System.currentTimeMillis() - dirtySince < SAVE_DEBOUNCE_MS) return;
+        dirty = false;
+        save();
+    }
+
+    private void markDirty() {
+        dirty = true;
+        dirtySince = System.currentTimeMillis();
     }
 
     private void load() {
@@ -131,19 +163,18 @@ public class FriendManager {
                 line = line.trim();
                 if (line.isEmpty() || line.startsWith("#")) continue;
 
-                if (line.contains(":") && line.indexOf(':') == 36) {
-                    // uuid:name
-                    int idx = line.indexOf(':');
+                int idx = line.indexOf(':');
+                if (idx == 36) {
                     String uuid = line.substring(0, idx).trim();
                     String name = line.substring(idx + 1).trim();
                     try {
                         UUID.fromString(uuid);
                         byUuid.put(uuid, name);
                         byName.put(name.toLowerCase(Locale.ROOT), uuid);
-                    } catch (IllegalArgumentException ignored) {
-                        // fall through to name-only
-                        byName.put(line.toLowerCase(Locale.ROOT), "name:" + line.toLowerCase(Locale.ROOT));
-                        byUuid.put("name:" + line.toLowerCase(Locale.ROOT), line);
+                    } catch (IllegalArgumentException e) {
+                        String key = line.toLowerCase(Locale.ROOT);
+                        byName.put(key, "name:" + key);
+                        byUuid.put("name:" + key, line);
                     }
                 } else {
                     String key = line.toLowerCase(Locale.ROOT);
@@ -159,17 +190,17 @@ public class FriendManager {
     private void save() {
         try (BufferedWriter w = new BufferedWriter(
                 new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
-            w.write("# Appetir Friends — format: uuid:name  or  name\n");
+            w.write("# Appetir Friends — uuid:name or name\n");
             Set<String> written = new HashSet<>();
             for (Map.Entry<String, String> e : byUuid.entrySet()) {
                 String id = e.getKey();
                 String name = e.getValue();
                 if (id.startsWith("name:")) {
-                    if (written.add(name.toLowerCase(Locale.ROOT))) {
+                    if (written.add("n:" + name.toLowerCase(Locale.ROOT))) {
                         w.write(name + "\n");
                     }
                 } else {
-                    if (written.add(id)) {
+                    if (written.add("u:" + id)) {
                         w.write(id + ":" + name + "\n");
                     }
                 }

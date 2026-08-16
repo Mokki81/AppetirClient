@@ -17,9 +17,14 @@ public class Spider extends Module {
     public void onTick() {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null) return;
-        if (mc.player.horizontalCollision && mc.options.keyForward.isPressed()) {
-            mc.player.setVelocity(mc.player.getVelocity().x, speed.get(), mc.player.getVelocity().z);
-        }
+        if (!mc.player.horizontalCollision) return;
+        if (!mc.options.keyForward.isPressed()) return;
+        if (mc.player.isTouchingWater() || mc.player.isSubmergedInWater()) return;
+        if (mc.player.isFallFlying()) return;
+        if (mc.player.abilities.flying) return;
+        if (mc.options.keySneak.isPressed()) return;
+
+        mc.player.setVelocity(mc.player.getVelocity().x, speed.get(), mc.player.getVelocity().z);
     }
 
     public double getClimbSpeed() {
