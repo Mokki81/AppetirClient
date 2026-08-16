@@ -22,12 +22,14 @@
     "NoRenderMixin",
     "NoRenderHudMixin",
     "NoRenderBossBarMixin",
+    "NoRenderOverlayMixin",
+    "NoRenderTotemMixin",
     "NoSlowMixin",
     "SpiderMixin",
     "WorldRendererMixin"
   ],
   "client": [],
   "injectors": {
-    "defaultRequire": 0
+    "defaultRequire": 1
   }
 }

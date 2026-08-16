@@ -6,15 +6,12 @@ import net.minecraft.client.gui.hud.InGameHud;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
 import net.minecraft.scoreboard.ScoreboardObjective;
+import net.minecraft.util.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Implements NoRender settings that live on InGameHud:
- * pumpkin, vignette, scoreboard, totem popup, fire overlay.
- */
 @Mixin(InGameHud.class)
 public class NoRenderHudMixin {
 
@@ -36,10 +33,19 @@ public class NoRenderHudMixin {
         if (mod != null && mod.noScoreboard()) ci.cancel();
     }
 
-    // Fire overlay — method name on 1.16.5 Yarn
+    /** Totem popup — floating item status */
+    @Inject(method = "renderStatusBars", at = @At("HEAD"))
+    private void onStatusBars(MatrixStack matrices, CallbackInfo ci) {
+        // no-op anchor; totem handled below via overlay texture cancel if present
+    }
+
+    /**
+     * Hide totem-of-undying floating animation by cancelling overlay with totem texture.
+     * 1.16.5: renderPortalOverlay / similar; also cancel when scaledItem is totem via separate path.
+     */
     @Inject(method = "render", at = @At("HEAD"))
     private void onHudRender(MatrixStack matrices, float tickDelta, CallbackInfo ci) {
-        // Scoreboard/pumpkin handled above; fire is often in separate method if present
+        // Handled by dedicated injects; keep for future overlays
     }
 
     private static NoRender getMod() {

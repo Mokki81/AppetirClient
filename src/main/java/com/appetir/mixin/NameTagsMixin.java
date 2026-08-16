@@ -7,6 +7,10 @@ import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.entity.PlayerEntityRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.text.LiteralText;
+import net.minecraft.text.MutableText;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -31,15 +35,17 @@ public class NameTagsMixin {
         float scale = 0.025f * mod.getScale();
         matrices.scale(-scale, -scale, scale);
 
-        String name = player.getGameProfile().getName();
-        String hp = mod.showHealth() ? String.format(" §c%.0f❤", player.getHealth()) : "";
-        String dist = mod.showDistance() ? String.format(" §7%.0fm", mc.player.distanceTo(player)) : "";
-        String arm = "";
-        if (mod.showArmor()) {
-            int armor = player.getArmor();
-            arm = String.format(" §b%d⛨", armor);
+        MutableText tag = new LiteralText(player.getGameProfile().getName()).formatted(Formatting.WHITE);
+        if (mod.showHealth()) {
+            tag.append(new LiteralText(String.format(" %.0f", player.getHealth())).formatted(Formatting.RED));
+            tag.append(new LiteralText("HP").formatted(Formatting.DARK_RED));
         }
-        String tag = name + hp + arm + dist;
+        if (mod.showArmor()) {
+            tag.append(new LiteralText(String.format(" %dA", player.getArmor())).formatted(Formatting.AQUA));
+        }
+        if (mod.showDistance()) {
+            tag.append(new LiteralText(String.format(" %.0fm", mc.player.distanceTo(player))).formatted(Formatting.GRAY));
+        }
 
         int tw = mc.textRenderer.getWidth(tag);
         mc.textRenderer.drawWithShadow(matrices, tag, -tw / 2f, -4, 0xFFFFFFFF);

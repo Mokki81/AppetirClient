@@ -2,6 +2,7 @@ package com.appetir.modules.impl;
 
 import com.appetir.modules.Module;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.Hand;
 
@@ -13,6 +14,7 @@ public class AutoEat extends Module {
     private int idleTicks;
     private int startHunger;
     private int startCount;
+    private Item startedItem;
 
     public AutoEat() {
         super("AutoEat", "Автоматически ест еду", Category.MISC);
@@ -34,6 +36,15 @@ public class AutoEat extends Module {
 
         if (startedUse) {
             if (mc.player.isUsingItem()) {
+                // Still ours only if same hand item
+                ItemStack active = mc.player.getActiveItem();
+                if (startedItem != null && !active.isEmpty() && active.getItem() != startedItem) {
+                    // User switched to another use — release ownership, don't stop
+                    startedUse = false;
+                    startedItem = null;
+                    restoreSlot();
+                    return;
+                }
                 idleTicks = 0;
                 return;
             }
@@ -60,10 +71,13 @@ public class AutoEat extends Module {
             startCount = held.getCount();
             foodSlot = mc.player.inventory.selectedSlot;
             prevSlot = -1;
+            startedItem = held.getItem();
             mc.interactionManager.interactItem(mc.player, mc.world, Hand.MAIN_HAND);
             if (mc.player.isUsingItem()) {
                 startedUse = true;
                 idleTicks = 0;
+            } else {
+                startedItem = null;
             }
             return;
         }
@@ -76,13 +90,14 @@ public class AutoEat extends Module {
             foodSlot = i;
             startCount = s.getCount();
             startHunger = mc.player.getHungerManager().getFoodLevel();
+            startedItem = s.getItem();
             mc.player.inventory.selectedSlot = i;
             mc.interactionManager.interactItem(mc.player, mc.world, Hand.MAIN_HAND);
             if (mc.player.isUsingItem()) {
                 startedUse = true;
                 idleTicks = 0;
             } else {
-                // didn't start — restore slot immediately
+                startedItem = null;
                 restoreSlot();
             }
             return;
@@ -93,9 +108,14 @@ public class AutoEat extends Module {
         if (!startedUse) return;
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player != null && mc.player.isUsingItem()) {
-            mc.player.stopUsingItem();
+            ItemStack active = mc.player.getActiveItem();
+            // Only stop if still the item we started
+            if (startedItem == null || active.isEmpty() || active.getItem() == startedItem) {
+                mc.player.stopUsingItem();
+            }
         }
         startedUse = false;
+        startedItem = null;
         idleTicks = 0;
     }
 

@@ -18,6 +18,7 @@ public class AutoPotion extends Module {
     private int cooldown = 0;
     private int prevSlot = -1;
     private int potionSlot = -1;
+    private boolean startedUse;
 
     public AutoPotion() {
         super("AutoPotion", "Пьёт healing/regen при низком HP", Category.COMBAT);
@@ -26,7 +27,15 @@ public class AutoPotion extends Module {
 
     @Override
     public void onDisable() {
+        if (startedUse) {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc.player != null && mc.player.isUsingItem()) {
+                mc.player.stopUsingItem();
+            }
+        }
+        startedUse = false;
         restoreSlot();
+        cooldown = 0;
     }
 
     @Override
@@ -34,13 +43,22 @@ public class AutoPotion extends Module {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.world == null || mc.interactionManager == null) return;
 
+        if (startedUse) {
+            if (mc.player.isUsingItem()) return;
+            // finished or cancelled
+            startedUse = false;
+            restoreSlot();
+            cooldown = 20;
+            return;
+        }
+
         if (cooldown > 0) {
             cooldown--;
-            if (cooldown == 0) restoreSlot();
             return;
         }
 
         if (mc.player.getHealth() > health.getFloat()) return;
+        if (mc.player.isUsingItem()) return;
         if (mc.player.hasStatusEffect(StatusEffects.REGENERATION)
                 && mc.player.getStatusEffect(StatusEffects.REGENERATION).getAmplifier() >= 1) return;
 
@@ -52,7 +70,11 @@ public class AutoPotion extends Module {
             potionSlot = i;
             mc.player.inventory.selectedSlot = i;
             mc.interactionManager.interactItem(mc.player, mc.world, Hand.MAIN_HAND);
-            cooldown = 25;
+            if (mc.player.isUsingItem()) {
+                startedUse = true;
+            } else {
+                restoreSlot();
+            }
             return;
         }
     }
@@ -67,7 +89,6 @@ public class AutoPotion extends Module {
         potionSlot = -1;
     }
 
-    /** Only drinkable potions — never splash/lingering. */
     private boolean isDrinkableHealing(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return false;
         if (stack.getItem() != Items.POTION) return false;
