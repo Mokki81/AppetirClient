@@ -6,6 +6,9 @@ import org.lwjgl.glfw.GLFW;
 
 public class TapeMouse extends Module {
 
+    private int previousCursorMode = GLFW.GLFW_CURSOR_NORMAL;
+    private boolean modeSaved;
+
     public TapeMouse() {
         super("TapeMouse", "Закрепление мыши", Category.MISC);
     }
@@ -13,14 +16,23 @@ public class TapeMouse extends Module {
     @Override
     public void onEnable() {
         MinecraftClient mc = MinecraftClient.getInstance();
-        GLFW.glfwSetInputMode(mc.getWindow().getHandle(),
-            GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
+        if (mc.getWindow() == null) return;
+        long handle = mc.getWindow().getHandle();
+        previousCursorMode = GLFW.glfwGetInputMode(handle, GLFW.GLFW_CURSOR);
+        modeSaved = true;
+        GLFW.glfwSetInputMode(handle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
     }
 
     @Override
     public void onDisable() {
         MinecraftClient mc = MinecraftClient.getInstance();
-        GLFW.glfwSetInputMode(mc.getWindow().getHandle(),
-            GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
+        if (mc.getWindow() == null || !modeSaved) return;
+        long handle = mc.getWindow().getHandle();
+        // If a screen is open, prefer NORMAL; else restore previous
+        int restore = mc.currentScreen != null
+                ? GLFW.GLFW_CURSOR_NORMAL
+                : previousCursorMode;
+        GLFW.glfwSetInputMode(handle, GLFW.GLFW_CURSOR, restore);
+        modeSaved = false;
     }
 }

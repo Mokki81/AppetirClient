@@ -9,6 +9,7 @@ import com.appetir.settings.BooleanSetting;
 import com.appetir.settings.ModeSetting;
 import com.appetir.settings.NumberSetting;
 import com.appetir.settings.Setting;
+import com.appetir.util.BindManager;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
@@ -65,9 +66,7 @@ public class ConfigManager {
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
             boolean changed = applyRoot(root);
             dirty = false;
-            if (changed) {
-                markDirty(); // persist deduped keys
-            }
+            if (changed) markDirty();
             System.out.println("[Appetir] Config loaded");
         } catch (Exception e) {
             System.err.println("[Appetir] Failed to load config: " + e.getMessage());
@@ -88,7 +87,6 @@ public class ConfigManager {
         }
     }
 
-    /** @return true if runtime state differs from file (e.g. key dedupe) */
     private boolean applyRoot(JsonObject root) {
         boolean changed = false;
 
@@ -128,7 +126,12 @@ public class ConfigManager {
                     if (entry.has("key")) {
                         int k = entry.get("key").getAsInt();
                         if (k >= 0) {
-                            if (keyOwners.containsKey(k)) {
+                            if (BindManager.isReserved(k)) {
+                                System.err.println("[Appetir] Reserved key " + k + " for "
+                                        + mod.getName() + " — cleared");
+                                mod.setKeyRaw(-1);
+                                changed = true;
+                            } else if (keyOwners.containsKey(k)) {
                                 System.err.println("[Appetir] Duplicate key " + k + " for "
                                         + mod.getName() + " (kept on " + keyOwners.get(k).getName() + ")");
                                 mod.setKeyRaw(-1);
@@ -200,18 +203,20 @@ public class ConfigManager {
     public void flushDirty() {
         if (!dirty) return;
         if (System.currentTimeMillis() - dirtySince < DEBOUNCE_MS) return;
-        dirty = false;
-        save();
+        if (save()) {
+            dirty = false;
+        }
+        // on failure dirty stays true → retry next flush
     }
 
     public void saveNow() {
-        dirty = false;
-        save();
+        if (save()) dirty = false;
     }
 
-    public void save() {
+    /** @return true if write succeeded */
+    public boolean save() {
         try {
-            if (!configDir.exists() && !configDir.mkdirs()) return;
+            if (!configDir.exists() && !configDir.mkdirs()) return false;
 
             JsonObject root = new JsonObject();
             root.addProperty("version", AppetirClient.VERSION);
@@ -260,17 +265,17 @@ public class ConfigManager {
                 }
             }
 
-            Files.move(configTmp.toPath(), configFile.toPath(),
-                    StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (Exception e) {
             try {
-                if (configTmp.exists()) {
-                    Files.move(configTmp.toPath(), configFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                }
-            } catch (Exception e2) {
-                System.err.println("[Appetir] Failed to save config: " + e.getMessage());
-                e.printStackTrace();
+                Files.move(configTmp.toPath(), configFile.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (Exception e) {
+                Files.move(configTmp.toPath(), configFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
             }
+            return true;
+        } catch (Exception e) {
+            System.err.println("[Appetir] Failed to save config: " + e.getMessage());
+            e.printStackTrace();
+            return false;
         }
     }
 
