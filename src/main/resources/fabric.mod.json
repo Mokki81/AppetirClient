@@ -3,7 +3,7 @@
   "id": "appetir",
   "version": "1.6.1",
   "name": "Appetir Client",
-  "description": "Premium Minecraft client — keybinds, keystrokes, modules, config, alts",
+  "description": "Premium Minecraft client — keybinds, keystrokes, modules, config, alts, Clean/Full mode",
   "authors": ["Appatia", "Grok"],
   "license": "All Rights Reserved",
   "environment": "client",

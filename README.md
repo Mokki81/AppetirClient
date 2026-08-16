@@ -1,53 +1,92 @@
 # Appetir Client
 
-**Version 1.2** · Minecraft 1.16.5 Fabric  
-Custom client with modules, modern ClickGUI, Offline Alt Manager and Config system.
+**Version 1.6.1** · Minecraft **1.16.5** · Fabric  
+Custom client: modules, settings, config, keybinds, keystrokes, Clean/Full mode.
 
-Improved by **Grok** (xAI).
+Authors: **Appatia** + **Grok** (xAI)
 
 ---
 
 ## Features
 
 ### Core
-- Full module system (Combat / Movement / Render / Misc)
-- Modern ClickGUI (Right Shift)
-- Offline Alt Manager (Right Control)
-- **Config system** — auto-saves modules, keybinds, theme, HUD
-- Theme system with animated Gradient
-- Clean HUD arraylist + watermark
+- Module system: Combat / Movement / Render / World / Misc
+- Settings: Boolean / Number / Mode (RMB on module)
+- Config: `.minecraft/appetir/config.json` (debounced auto-save)
+- Keybinds per module (Neverlose-style bind UI)
+- Keystrokes HUD (WASD, Space, LMB/RMB)
+- Offline Alt Manager
+- Friends list + NoFriendDamage
+- Themes with animated accent
+- Notifications on toggle
+- **ClientMode Clean / Full** — Clean looks like a performance/QOL mod
+
+### KillAura
+- Modes: **Legit** / **Rage**
+- FOV, range, random delay, soft aim, optional crits
+
+### ItemPhysic
+- Items tip while falling, rest flat on ground (no spin glitch)
 
 ### Controls
-| Key              | Action                    |
-|------------------|---------------------------|
-| Right Shift      | Open / Close ClickGUI     |
-| Right Control    | Open Alt Manager          |
-| Right Alt        | Toggle HUD                |
 
-### Config
-- Path: `.minecraft/appetir/config.json`
-- Auto-saves when you toggle modules / change theme / HUD
-- Loads automatically on startup
+| Key | Action |
+|-----|--------|
+| **Right Shift** | ClickGUI |
+| **Right Control** | Alt Manager (Full mode) |
+| **Right Alt** | Toggle HUD |
+| **Insert** | Toggle **Clean / Full** mode |
+| Module bind | Toggle that module |
 
-### Alt Manager
-- Offline accounts only (nickname)
-- Add / Remove / Login
-- Persistent save (`appetir_alts.txt`)
-- Instant session switch
+### ClickGUI
+- LMB — toggle module
+- RMB — expand settings + **Bind**
+- Bind row: press key / DEL unbind / ESC cancel
+- Sidebar: categories, Themes, Alts, **Mode: Clean/Full**
+
+### Clean mode
+- Hides Combat & Movement
+- Forces restricted modules off
+- Watermark: `Appetir Performance`
+- Only QOL / render / misc utilities visible
 
 ---
 
 ## Build
 
 ```bash
+git pull origin main
 ./gradlew build
 ```
 
-Requires Java 8+.
+Java **8**, Fabric Loader **≥ 0.14.21**, Loom **0.12.56**.
+
+CI: GitHub Actions on `main` (`.github/workflows/build.yml`).
+
+### Repo hygiene
+See `CLEANUP.md` if `.gradle/` / `run/` are still tracked locally:
+
+```bash
+git rm -r --cached .gradle build run logs libraries .idea 2>/dev/null
+git commit -m "Stop tracking build caches"
+git push
+```
+
+---
+
+## Changelog (high level)
+
+| Ver | Notes |
+|-----|--------|
+| 1.1–1.3 | Alt Manager, ClickGUI, Config, Settings, Friends |
+| 1.4 | Visual overhaul, themes, HUD |
+| 1.5 | Movement / Render / Misc modules |
+| 1.6 | Keybinds + Keystrokes |
+| 1.6.1 | Hardening, CI, KillAura Legit, ItemPhysic fix, ClientMode |
 
 ---
 
 ## Credits
 
-- Original: Appatia
-- Quality, visuals, AltManager, Config & structure: **Grok**
+- Original: **Appatia**
+- Architecture, GUI, systems, polish: **Grok**
