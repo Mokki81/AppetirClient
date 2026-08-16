@@ -57,7 +57,6 @@ public final class FriendManager {
         String name = player.getGameProfile().getName();
         String nameKey = name.toLowerCase(Locale.ROOT);
 
-        // Drop any previous name keys pointing at this uuid
         byName.entrySet().removeIf(e -> uuid.equals(e.getValue()));
         byUuid.remove("name:" + nameKey);
 
@@ -76,7 +75,6 @@ public final class FriendManager {
         byUuid.remove(id);
         byUuid.remove("name:" + key);
 
-        // Also strip any other names that pointed at same uuid
         if (!id.startsWith("name:")) {
             byName.entrySet().removeIf(e -> id.equals(e.getValue()));
         }
@@ -88,6 +86,15 @@ public final class FriendManager {
         return name != null && byName.containsKey(name.toLowerCase(Locale.ROOT));
     }
 
+    /**
+     * Read-only check for render path — no rename upgrades, no markDirty.
+     */
+    public boolean isFriendReadOnly(PlayerEntity player) {
+        if (player == null) return false;
+        if (byUuid.containsKey(player.getUuid().toString())) return true;
+        return isFriend(player.getGameProfile().getName());
+    }
+
     public boolean isFriend(PlayerEntity player) {
         if (player == null) return false;
         String uuid = player.getUuid().toString();
@@ -95,7 +102,6 @@ public final class FriendManager {
             String newName = player.getGameProfile().getName();
             String oldName = byUuid.get(uuid);
             if (oldName == null || !oldName.equals(newName)) {
-                // Rename: remove old name mapping, keep uuid
                 if (oldName != null) {
                     byName.remove(oldName.toLowerCase(Locale.ROOT));
                 }
@@ -107,7 +113,6 @@ public final class FriendManager {
         }
         String name = player.getGameProfile().getName();
         if (isFriend(name)) {
-            // Upgrade legacy name-only entry without immediate disk spam
             byUuid.remove("name:" + name.toLowerCase(Locale.ROOT));
             byName.remove(name.toLowerCase(Locale.ROOT));
             byUuid.put(uuid, name);
@@ -141,7 +146,6 @@ public final class FriendManager {
         return Collections.unmodifiableSet(names);
     }
 
-    /** Call from client tick to flush debounced saves. */
     public void flushDirty() {
         if (!dirty) return;
         if (System.currentTimeMillis() - dirtySince < SAVE_DEBOUNCE_MS) return;
