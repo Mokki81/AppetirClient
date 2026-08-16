@@ -63,7 +63,11 @@ public class ConfigManager {
         try {
             String json = new String(Files.readAllBytes(configFile.toPath()), StandardCharsets.UTF_8);
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
-            applyRoot(root);
+            boolean changed = applyRoot(root);
+            dirty = false;
+            if (changed) {
+                markDirty(); // persist deduped keys
+            }
             System.out.println("[Appetir] Config loaded");
         } catch (Exception e) {
             System.err.println("[Appetir] Failed to load config: " + e.getMessage());
@@ -84,7 +88,10 @@ public class ConfigManager {
         }
     }
 
-    private void applyRoot(JsonObject root) {
+    /** @return true if runtime state differs from file (e.g. key dedupe) */
+    private boolean applyRoot(JsonObject root) {
+        boolean changed = false;
+
         if (root.has("hudVisible"))
             AppetirClient.hudVisible = root.get("hudVisible").getAsBoolean();
 
@@ -105,9 +112,7 @@ public class ConfigManager {
         }
 
         ModuleManager mm = ModuleManager.getInstance();
-        if (mm == null) return;
-
-        boolean keyDedupe = false;
+        if (mm == null) return false;
 
         if (root.has("modules")) {
             JsonObject modules = root.getAsJsonObject("modules");
@@ -127,7 +132,7 @@ public class ConfigManager {
                                 System.err.println("[Appetir] Duplicate key " + k + " for "
                                         + mod.getName() + " (kept on " + keyOwners.get(k).getName() + ")");
                                 mod.setKeyRaw(-1);
-                                keyDedupe = true;
+                                changed = true;
                             } else {
                                 mod.setKeyRaw(k);
                                 keyOwners.put(k, mod);
@@ -165,12 +170,7 @@ public class ConfigManager {
         }
 
         mm.rebuildKeyMap();
-
-        if (keyDedupe) {
-            markDirty();
-        } else {
-            dirty = false;
-        }
+        return changed;
     }
 
     private void loadSettings(Module mod, JsonObject settingsObj) {

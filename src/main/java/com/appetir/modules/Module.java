@@ -66,8 +66,13 @@ public abstract class Module {
             NotificationManager.pushModule(name, value);
             markConfigDirty();
         } catch (Exception e) {
+            System.err.println("[Appetir] Error in module " + name
+                    + " (" + e.getClass().getSimpleName() + "): "
+                    + (e.getMessage() != null ? e.getMessage() : "(no message)"));
+            e.printStackTrace();
+
             if (value) {
-                // Failed to enable — try cleanup and stay OFF
+                // onEnable failed → try cleanup, stay OFF
                 try {
                     onDisable();
                 } catch (Exception cleanupEx) {
@@ -77,19 +82,10 @@ public abstract class Module {
                 }
                 this.enabled = false;
             } else {
-                // Failed to disable — MUST stay OFF (do not call onEnable)
+                // onDisable failed → stay OFF (never re-enable)
                 this.enabled = false;
-                System.err.println("[Appetir] onDisable failed for " + name
-                        + " — forced enabled=false");
             }
-            System.err.println("[Appetir] Error in module " + name
-                    + " (" + e.getClass().getSimpleName() + "): "
-                    + (e.getMessage() != null ? e.getMessage() : "(no message)")
-                    + " — previous was " + previous + ", now enabled=" + this.enabled);
-            e.printStackTrace();
-            try {
-                markConfigDirty();
-            } catch (Exception ignored) {}
+            markConfigDirty();
         }
     }
 
@@ -97,9 +93,7 @@ public abstract class Module {
         this.enabled = value;
     }
 
-    /**
-     * Emergency path: force OFF even if onDisable throws.
-     */
+    /** Guaranteed OFF even if onDisable throws. */
     public final void forceDisable() {
         try {
             if (enabled) onDisable();

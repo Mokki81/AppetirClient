@@ -1,17 +1,20 @@
 package com.appetir.modules.impl;
 
 import com.appetir.modules.Module;
-import com.appetir.util.KeyOwnership;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.BowItem;
+import net.minecraft.util.Hand;
 
+/**
+ * Aims and charges bow via interactionManager — does not own keyUse.
+ */
 public class BowHelper extends Module {
 
     private int chargeTicks = 0;
-    private boolean ownedUse;
+    private boolean startedUse;
 
     public BowHelper() {
         super("BowHelper", "Помогает при стрельбе из лука", Category.COMBAT);
@@ -19,20 +22,20 @@ public class BowHelper extends Module {
 
     @Override
     public void onDisable() {
-        releaseUse();
+        release();
         chargeTicks = 0;
     }
 
     @Override
     public void onTick() {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player == null || mc.world == null || mc.options == null) {
-            releaseUse();
+        if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+            release();
             return;
         }
 
         if (!(mc.player.getMainHandStack().getItem() instanceof BowItem)) {
-            releaseUse();
+            release();
             chargeTicks = 0;
             return;
         }
@@ -50,7 +53,7 @@ public class BowHelper extends Module {
         }
 
         if (target == null) {
-            releaseUse();
+            release();
             chargeTicks = 0;
             return;
         }
@@ -62,25 +65,30 @@ public class BowHelper extends Module {
         mc.player.yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
         mc.player.pitch = (float) Math.toDegrees(-Math.atan((dy - dist * 0.1) / Math.max(dist, 0.001)));
 
-        if (!ownedUse) {
-            ownedUse = KeyOwnership.pressUseIfFree(mc);
-        }
-        // If user already holds RMB, we still charge via their input
-        if (!ownedUse && !mc.options.keyUse.isPressed()) {
-            // neither us nor user — nothing to charge
+        if (!startedUse && !mc.player.isUsingItem()) {
+            mc.interactionManager.interactItem(mc.player, mc.world, Hand.MAIN_HAND);
+            startedUse = true;
             chargeTicks = 0;
-            return;
         }
 
-        if (++chargeTicks >= 20) {
-            releaseUse();
-            chargeTicks = 0;
+        if (startedUse) {
+            if (++chargeTicks >= 20) {
+                // Release shot
+                if (mc.player.isUsingItem()) {
+                    mc.interactionManager.stopUsingItem(mc.player);
+                }
+                startedUse = false;
+                chargeTicks = 0;
+            }
         }
     }
 
-    private void releaseUse() {
+    private void release() {
+        if (!startedUse) return;
         MinecraftClient mc = MinecraftClient.getInstance();
-        KeyOwnership.releaseUseIfOwned(mc, ownedUse);
-        ownedUse = false;
+        if (mc.player != null && mc.interactionManager != null && mc.player.isUsingItem()) {
+            mc.interactionManager.stopUsingItem(mc.player);
+        }
+        startedUse = false;
     }
 }

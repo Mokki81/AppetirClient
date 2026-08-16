@@ -8,20 +8,18 @@ import net.minecraft.screen.PlayerScreenHandler;
 import net.minecraft.screen.slot.SlotActionType;
 
 /**
- * State machine with stack-based confirmation between clicks.
+ * State machine: advance only when client inventory reflects expected state.
  */
 public class AutoTotem extends Module {
 
     private enum Phase {
-        IDLE, WAIT_PICKUP, TO_OFFHAND, WAIT_OFFHAND, RETURN, WAIT_RETURN, COOLDOWN
+        IDLE, WAIT_PICKUP, WAIT_OFFHAND, WAIT_RETURN, COOLDOWN
     }
 
     private Phase phase = Phase.IDLE;
     private int containerSlot = -1;
     private int syncId = -1;
-    private int waitTicks = 0;
-    private int stallTicks = 0;
-    private static final int MAX_STALL = 20;
+    private int timeout = 0;
 
     public AutoTotem() {
         super("AutoTotem", "Автоматически кладёт тотем в оффхенд", Category.COMBAT);
@@ -29,38 +27,28 @@ public class AutoTotem extends Module {
 
     @Override
     public void onDisable() {
-        reset();
-    }
-
-    private void reset() {
         phase = Phase.IDLE;
         containerSlot = -1;
         syncId = -1;
-        waitTicks = 0;
-        stallTicks = 0;
+        timeout = 0;
     }
 
     @Override
     public void onTick() {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.interactionManager == null || mc.world == null) {
-            reset();
+            phase = Phase.IDLE;
             return;
         }
 
         if (!(mc.player.currentScreenHandler instanceof PlayerScreenHandler)
                 || mc.player.currentScreenHandler != mc.player.playerScreenHandler) {
-            reset();
+            phase = Phase.IDLE;
             return;
         }
 
         if (mc.player.getOffHandStack().getItem() == Items.TOTEM_OF_UNDYING) {
-            if (phase != Phase.IDLE && phase != Phase.COOLDOWN) reset();
-            return;
-        }
-
-        if (waitTicks > 0) {
-            waitTicks--;
+            phase = Phase.IDLE;
             return;
         }
 
@@ -70,85 +58,75 @@ public class AutoTotem extends Module {
                 int inv = findTotemInvSlot(mc);
                 if (inv < 0) return;
                 containerSlot = inv < 9 ? inv + 36 : inv;
-                // Verify slot still holds totem
-                if (!slotIsTotem(mc, inv)) return;
                 syncId = mc.player.playerScreenHandler.syncId;
+                // Verify slot still has totem
+                if (!slotHasTotem(mc, containerSlot)) return;
                 mc.interactionManager.clickSlot(syncId, containerSlot, 0, SlotActionType.PICKUP, mc.player);
                 phase = Phase.WAIT_PICKUP;
-                stallTicks = 0;
+                timeout = 10;
                 break;
             }
-
             case WAIT_PICKUP: {
-                if (!validHandler(mc)) { reset(); return; }
-                ItemStack cursor = mc.player.inventory.getCursorStack();
-                if (cursor.getItem() == Items.TOTEM_OF_UNDYING) {
-                    phase = Phase.TO_OFFHAND;
-                    stallTicks = 0;
-                } else if (++stallTicks > MAX_STALL) {
-                    reset();
-                }
-                break;
-            }
-
-            case TO_OFFHAND: {
-                if (!validHandler(mc)) { reset(); return; }
-                if (mc.player.inventory.getCursorStack().getItem() != Items.TOTEM_OF_UNDYING) {
-                    reset();
+                if (!validHandler(mc) || --timeout <= 0) {
+                    abort(mc);
                     return;
                 }
-                mc.interactionManager.clickSlot(syncId, 45, 0, SlotActionType.PICKUP, mc.player);
-                phase = Phase.WAIT_OFFHAND;
-                stallTicks = 0;
+                if (cursorIsTotem(mc)) {
+                    mc.interactionManager.clickSlot(syncId, 45, 0, SlotActionType.PICKUP, mc.player);
+                    phase = Phase.WAIT_OFFHAND;
+                    timeout = 10;
+                }
                 break;
             }
-
             case WAIT_OFFHAND: {
-                if (!validHandler(mc)) { reset(); return; }
+                if (!validHandler(mc) || --timeout <= 0) {
+                    abort(mc);
+                    return;
+                }
                 if (mc.player.getOffHandStack().getItem() == Items.TOTEM_OF_UNDYING) {
-                    phase = Phase.RETURN;
-                    stallTicks = 0;
-                } else if (++stallTicks > MAX_STALL) {
-                    reset();
+                    // Return whatever is on cursor (previous offhand)
+                    if (!mc.player.inventory.getCursorStack().isEmpty()) {
+                        mc.interactionManager.clickSlot(syncId, containerSlot, 0, SlotActionType.PICKUP, mc.player);
+                        phase = Phase.WAIT_RETURN;
+                        timeout = 10;
+                    } else {
+                        phase = Phase.COOLDOWN;
+                        timeout = 3;
+                    }
                 }
                 break;
             }
-
-            case RETURN: {
-                if (!validHandler(mc)) { reset(); return; }
-                if (!mc.player.inventory.getCursorStack().isEmpty()) {
-                    mc.interactionManager.clickSlot(syncId, containerSlot, 0, SlotActionType.PICKUP, mc.player);
-                    phase = Phase.WAIT_RETURN;
-                    stallTicks = 0;
-                } else {
-                    phase = Phase.COOLDOWN;
-                    waitTicks = 2;
-                }
-                break;
-            }
-
             case WAIT_RETURN: {
-                if (!validHandler(mc)) { reset(); return; }
+                if (!validHandler(mc) || --timeout <= 0) {
+                    // Best effort: try put cursor anywhere safe
+                    abort(mc);
+                    return;
+                }
                 if (mc.player.inventory.getCursorStack().isEmpty()) {
                     phase = Phase.COOLDOWN;
-                    waitTicks = 2;
-                    stallTicks = 0;
-                } else if (++stallTicks > MAX_STALL) {
-                    // Force drop attempt / abort
-                    reset();
+                    timeout = 3;
                 }
                 break;
             }
-
-            case COOLDOWN:
-                reset();
+            case COOLDOWN: {
+                if (--timeout <= 0) {
+                    phase = Phase.IDLE;
+                    containerSlot = -1;
+                }
                 break;
+            }
         }
     }
 
-    private boolean slotIsTotem(MinecraftClient mc, int invIndex) {
-        if (invIndex < 0 || invIndex >= 36) return false;
-        return mc.player.inventory.getStack(invIndex).getItem() == Items.TOTEM_OF_UNDYING;
+    private void abort(MinecraftClient mc) {
+        // If cursor holds something, try return to source slot once
+        try {
+            if (validHandler(mc) && !mc.player.inventory.getCursorStack().isEmpty() && containerSlot >= 0) {
+                mc.interactionManager.clickSlot(syncId, containerSlot, 0, SlotActionType.PICKUP, mc.player);
+            }
+        } catch (Exception ignored) {}
+        phase = Phase.COOLDOWN;
+        timeout = 5;
     }
 
     private boolean validHandler(MinecraftClient mc) {
@@ -156,6 +134,17 @@ public class AutoTotem extends Module {
                 && mc.interactionManager != null
                 && mc.player.currentScreenHandler instanceof PlayerScreenHandler
                 && mc.player.currentScreenHandler.syncId == syncId;
+    }
+
+    private boolean cursorIsTotem(MinecraftClient mc) {
+        return mc.player.inventory.getCursorStack().getItem() == Items.TOTEM_OF_UNDYING;
+    }
+
+    private boolean slotHasTotem(MinecraftClient mc, int containerSlot) {
+        // Map container slot back to inventory index for read
+        int inv = containerSlot >= 36 && containerSlot <= 44 ? containerSlot - 36 : containerSlot;
+        if (inv < 0 || inv >= 36) return false;
+        return mc.player.inventory.getStack(inv).getItem() == Items.TOTEM_OF_UNDYING;
     }
 
     private int findTotemInvSlot(MinecraftClient mc) {

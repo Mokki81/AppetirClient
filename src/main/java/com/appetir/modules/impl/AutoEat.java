@@ -1,16 +1,19 @@
 package com.appetir.modules.impl;
 
 import com.appetir.modules.Module;
-import com.appetir.util.KeyOwnership;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.Hand;
 
+/**
+ * Eats via interactionManager — does not own keyUse.
+ */
 public class AutoEat extends Module {
 
     private int cooldown = 0;
-    private boolean ownedUse;
     private int prevSlot = -1;
     private int foodSlot = -1;
+    private boolean startedUse;
 
     public AutoEat() {
         super("AutoEat", "Автоматически ест еду", Category.MISC);
@@ -18,29 +21,29 @@ public class AutoEat extends Module {
 
     @Override
     public void onDisable() {
-        releaseUse();
+        stopIfOurs();
         restoreSlot();
     }
 
     @Override
     public void onTick() {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player == null || mc.options == null) {
-            releaseUse();
+        if (mc.player == null || mc.world == null || mc.interactionManager == null) {
+            stopIfOurs();
             return;
         }
 
         if (cooldown > 0) {
             cooldown--;
             if (cooldown == 0) {
-                releaseUse();
+                stopIfOurs();
                 restoreSlot();
             }
             return;
         }
 
         if (mc.player.getHungerManager().getFoodLevel() >= 17) {
-            releaseUse();
+            stopIfOurs();
             restoreSlot();
             return;
         }
@@ -54,18 +57,20 @@ public class AutoEat extends Module {
             if (prevSlot < 0) prevSlot = mc.player.inventory.selectedSlot;
             foodSlot = i;
             mc.player.inventory.selectedSlot = i;
-            ownedUse = KeyOwnership.pressUseIfFree(mc) || ownedUse;
+            mc.interactionManager.interactItem(mc.player, mc.world, Hand.MAIN_HAND);
+            startedUse = true;
             cooldown = 32;
             return;
         }
-
-        releaseUse();
     }
 
-    private void releaseUse() {
+    private void stopIfOurs() {
+        if (!startedUse) return;
         MinecraftClient mc = MinecraftClient.getInstance();
-        KeyOwnership.releaseUseIfOwned(mc, ownedUse);
-        ownedUse = false;
+        if (mc.player != null && mc.player.isUsingItem()) {
+            mc.player.stopUsingItem();
+        }
+        startedUse = false;
     }
 
     private void restoreSlot() {

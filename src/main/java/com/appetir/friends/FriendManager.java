@@ -18,10 +18,13 @@ public final class FriendManager {
 
     private static volatile FriendManager instance;
 
-    /** Real UUID string → display name (preserves casing) */
+    /** UUID string → display name */
     private final Map<String, String> byUuid = new HashMap<>();
-    /** lowercase name → uuid string OR "name:" + original casing for legacy */
+    /** lowercase name → uuid OR null for legacy-only */
     private final Map<String, String> byName = new HashMap<>();
+    /** lowercase name → original casing for legacy friends */
+    private final Map<String, String> legacyDisplay = new HashMap<>();
+
     private final File file;
     private boolean dirty;
     private long dirtySince;
@@ -47,8 +50,8 @@ public final class FriendManager {
         String n = name.trim();
         String key = n.toLowerCase(Locale.ROOT);
         if (byName.containsKey(key)) return false;
-        // Store original casing after "name:"
-        byName.put(key, "name:" + n);
+        byName.put(key, null); // legacy
+        legacyDisplay.put(key, n);
         markDirty();
         return true;
     }
@@ -63,19 +66,19 @@ public final class FriendManager {
     private void promoteToUuid(String uuid, String name) {
         String nameKey = name.toLowerCase(Locale.ROOT);
 
+        // Clear name→uuid mappings for this uuid
         byName.entrySet().removeIf(e -> uuid.equals(e.getValue()));
-        byName.remove(nameKey);
 
-        // If another UUID already owns this name, leave their byUuid but drop name index to newest
-        String previousOwner = null;
-        for (Map.Entry<String, String> e : byUuid.entrySet()) {
-            if (!e.getKey().startsWith("name:") && name.equalsIgnoreCase(e.getValue())
-                    && !e.getKey().equals(uuid)) {
-                previousOwner = e.getKey();
-                break;
-            }
+        // If another UUID already owns this nickname, keep UUID check but name points to newest
+        String prevOwner = byName.get(nameKey);
+        if (prevOwner != null && !prevOwner.equals(uuid)) {
+            // nickname collision: name map → newest uuid; both stay friends by UUID
+            System.err.println("[Appetir] Friend nickname collision: " + name
+                    + " was " + prevOwner + ", now " + uuid);
         }
-        // Prefer newest mapping for byName; keep both UUID entries for isFriend(UUID)
+
+        byName.remove(nameKey);
+        legacyDisplay.remove(nameKey);
 
         byUuid.put(uuid, name);
         byName.put(nameKey, uuid);
@@ -84,11 +87,14 @@ public final class FriendManager {
     public boolean remove(String name) {
         if (name == null) return false;
         String key = name.trim().toLowerCase(Locale.ROOT);
-        String id = byName.remove(key);
-        if (id == null) return false;
+        if (!byName.containsKey(key)) return false;
 
-        if (!id.startsWith("name:")) {
+        String id = byName.remove(key);
+        legacyDisplay.remove(key);
+
+        if (id != null) {
             byUuid.remove(id);
+            // remove other name keys pointing at same uuid
             byName.entrySet().removeIf(e -> id.equals(e.getValue()));
         }
         markDirty();
@@ -149,15 +155,13 @@ public final class FriendManager {
 
     public Set<String> getFriends() {
         Set<String> names = new HashSet<>();
-        for (Map.Entry<String, String> e : byUuid.entrySet()) {
-            if (!e.getKey().startsWith("name:")) {
-                names.add(e.getValue()); // original casing
-            }
+        for (String display : byUuid.values()) {
+            names.add(display);
         }
         for (Map.Entry<String, String> e : byName.entrySet()) {
-            if (e.getValue().startsWith("name:")) {
-                // "name:OriginalCasing"
-                names.add(e.getValue().substring(5));
+            if (e.getValue() == null) {
+                String display = legacyDisplay.getOrDefault(e.getKey(), e.getKey());
+                names.add(display);
             }
         }
         return Collections.unmodifiableSet(names);
@@ -178,6 +182,7 @@ public final class FriendManager {
     private void load() {
         byUuid.clear();
         byName.clear();
+        legacyDisplay.clear();
         if (!file.exists()) return;
         try {
             for (String line : Files.readAllLines(file.toPath(), StandardCharsets.UTF_8)) {
@@ -194,11 +199,13 @@ public final class FriendManager {
                         byName.put(name.toLowerCase(Locale.ROOT), uuid);
                     } catch (IllegalArgumentException e) {
                         String key = line.toLowerCase(Locale.ROOT);
-                        byName.put(key, "name:" + line);
+                        byName.put(key, null);
+                        legacyDisplay.put(key, line);
                     }
                 } else {
                     String key = line.toLowerCase(Locale.ROOT);
-                    byName.put(key, "name:" + line); // preserve casing in value
+                    byName.put(key, null);
+                    legacyDisplay.put(key, line);
                 }
             }
         } catch (Exception e) {
@@ -214,16 +221,15 @@ public final class FriendManager {
             Set<String> writtenName = new HashSet<>();
 
             for (Map.Entry<String, String> e : byUuid.entrySet()) {
-                if (e.getKey().startsWith("name:")) continue;
                 if (writtenUuid.add(e.getKey())) {
                     w.write(e.getKey() + ":" + e.getValue() + "\n");
                     writtenName.add(e.getValue().toLowerCase(Locale.ROOT));
                 }
             }
             for (Map.Entry<String, String> e : byName.entrySet()) {
-                if (!e.getValue().startsWith("name:")) continue;
-                String display = e.getValue().substring(5);
+                if (e.getValue() != null) continue; // UUID-backed
                 if (writtenName.add(e.getKey())) {
+                    String display = legacyDisplay.getOrDefault(e.getKey(), e.getKey());
                     w.write(display + "\n");
                 }
             }
