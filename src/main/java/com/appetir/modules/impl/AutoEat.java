@@ -5,16 +5,14 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.Hand;
 
-/**
- * Eats via interactionManager. Tracks real use state, not fixed 32-tick timer.
- */
 public class AutoEat extends Module {
 
     private int prevSlot = -1;
     private int foodSlot = -1;
     private boolean startedUse;
-    private int idleTicks; // ticks since interact without isUsingItem
+    private int idleTicks;
     private int startHunger;
+    private int startCount;
 
     public AutoEat() {
         super("AutoEat", "Автоматически ест еду", Category.MISC);
@@ -34,16 +32,19 @@ public class AutoEat extends Module {
             return;
         }
 
-        // Finish path: we started use — wait until not using or hunger improved
         if (startedUse) {
             if (mc.player.isUsingItem()) {
                 idleTicks = 0;
                 return;
             }
-            // Not using — either finished or never started
             idleTicks++;
             boolean hungerUp = mc.player.getHungerManager().getFoodLevel() > startHunger;
-            if (hungerUp || idleTicks > 5) {
+            boolean stackDown = false;
+            if (foodSlot >= 0) {
+                ItemStack s = mc.player.inventory.getStack(foodSlot);
+                stackDown = s.getCount() < startCount;
+            }
+            if (hungerUp || stackDown || idleTicks > 8) {
                 stopIfOurs();
                 restoreSlot();
             }
@@ -52,16 +53,18 @@ public class AutoEat extends Module {
 
         if (mc.player.getHungerManager().getFoodLevel() >= 17) return;
         if (mc.player.isUsingItem()) return;
-        // Don't steal slot if player already holding food and might use it
+
         ItemStack held = mc.player.getMainHandStack();
         if (held.getItem().isFood()) {
-            // Use current slot only
             startHunger = mc.player.getHungerManager().getFoodLevel();
-            mc.interactionManager.interactItem(mc.player, mc.world, Hand.MAIN_HAND);
-            startedUse = true;
-            idleTicks = 0;
+            startCount = held.getCount();
             foodSlot = mc.player.inventory.selectedSlot;
-            prevSlot = -1; // didn't change slot
+            prevSlot = -1;
+            mc.interactionManager.interactItem(mc.player, mc.world, Hand.MAIN_HAND);
+            if (mc.player.isUsingItem()) {
+                startedUse = true;
+                idleTicks = 0;
+            }
             return;
         }
 
@@ -71,11 +74,17 @@ public class AutoEat extends Module {
 
             prevSlot = mc.player.inventory.selectedSlot;
             foodSlot = i;
-            mc.player.inventory.selectedSlot = i;
+            startCount = s.getCount();
             startHunger = mc.player.getHungerManager().getFoodLevel();
+            mc.player.inventory.selectedSlot = i;
             mc.interactionManager.interactItem(mc.player, mc.world, Hand.MAIN_HAND);
-            startedUse = true;
-            idleTicks = 0;
+            if (mc.player.isUsingItem()) {
+                startedUse = true;
+                idleTicks = 0;
+            } else {
+                // didn't start — restore slot immediately
+                restoreSlot();
+            }
             return;
         }
     }

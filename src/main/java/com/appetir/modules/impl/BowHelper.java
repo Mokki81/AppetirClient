@@ -4,11 +4,12 @@ import com.appetir.modules.Module;
 import com.appetir.settings.BooleanSetting;
 import com.appetir.settings.NumberSetting;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.enchantment.EnchantmentHelper;
+import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ArrowItem;
 import net.minecraft.item.BowItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -21,74 +22,94 @@ public class BowHelper extends Module {
 
     private final BooleanSetting playersOnly = new BooleanSetting("PlayersOnly", "Only aim players", true);
     private final BooleanSetting requireLos = new BooleanSetting("LineOfSight", "Require clear LOS", true);
-    private final BooleanSetting softAim = new BooleanSetting("SoftAim", "Smooth aim (don't snap)", true);
+    private final BooleanSetting softAim = new BooleanSetting("SoftAim", "Smooth aim", true);
+    private final BooleanSetting autoShoot = new BooleanSetting("AutoShoot", "Auto charge and release", true);
     private final NumberSetting range = new NumberSetting("Range", "Max target range", 40, 10, 64, 2);
     private final NumberSetting aimSpeed = new NumberSetting("AimSpeed", "Soft aim factor", 0.35, 0.1, 1.0, 0.05);
+    private final NumberSetting shotCooldown = new NumberSetting("Cooldown", "Ticks after shot", 8, 0, 40, 1);
 
-    private int chargeTicks = 0;
-    private boolean startedUse;
+    private boolean moduleOwnsUse;
+    private int postShotCooldown;
 
     public BowHelper() {
         super("BowHelper", "Помогает при стрельбе из лука", Category.COMBAT);
         addSetting(playersOnly);
         addSetting(requireLos);
         addSetting(softAim);
+        addSetting(autoShoot);
         addSetting(range);
         addSetting(aimSpeed);
+        addSetting(shotCooldown);
     }
 
     @Override
     public void onDisable() {
-        release();
-        chargeTicks = 0;
+        releaseIfOurs();
+        postShotCooldown = 0;
     }
 
     @Override
     public void onTick() {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.world == null || mc.interactionManager == null) {
-            release();
+            releaseIfOurs();
+            return;
+        }
+
+        if (postShotCooldown > 0) {
+            postShotCooldown--;
             return;
         }
 
         if (!(mc.player.getMainHandStack().getItem() instanceof BowItem)) {
-            release();
-            chargeTicks = 0;
+            releaseIfOurs();
             return;
         }
 
         if (!hasArrows(mc)) {
-            release();
-            chargeTicks = 0;
+            releaseIfOurs();
             return;
         }
 
         Entity target = findTarget(mc);
+
+        // User already using bow — only soft-aim assist, never release their use
+        if (mc.player.isUsingItem() && !moduleOwnsUse) {
+            if (target != null) aimAt(mc, target);
+            return;
+        }
+
         if (target == null) {
-            release();
-            chargeTicks = 0;
+            releaseIfOurs();
             return;
         }
 
         aimAt(mc, target);
 
-        if (!startedUse && !mc.player.isUsingItem()) {
+        if (!autoShoot.get()) return;
+
+        if (!moduleOwnsUse) {
+            if (mc.player.isUsingItem()) return; // user owns it
             mc.interactionManager.interactItem(mc.player, mc.world, Hand.MAIN_HAND);
-            startedUse = true;
-            chargeTicks = 0;
+            if (mc.player.isUsingItem()) {
+                moduleOwnsUse = true;
+            }
+            return;
         }
 
-        if (startedUse) {
-            // Prefer vanilla pull progress when possible
-            float pull = BowItem.getPullProgress(mc.player.getItemUseTime());
-            boolean full = pull >= 0.95f || ++chargeTicks >= 22;
-            if (full) {
-                if (mc.player.isUsingItem()) {
-                    mc.interactionManager.stopUsingItem(mc.player);
-                }
-                startedUse = false;
-                chargeTicks = 0;
-            }
+        // We own the charge
+        if (!mc.player.isUsingItem()) {
+            // Use ended unexpectedly
+            moduleOwnsUse = false;
+            postShotCooldown = shotCooldown.getInt();
+            return;
+        }
+
+        float pull = BowItem.getPullProgress(mc.player.getItemUseTime());
+        if (pull >= 0.95f) {
+            mc.interactionManager.stopUsingItem(mc.player);
+            moduleOwnsUse = false;
+            postShotCooldown = shotCooldown.getInt();
         }
     }
 
@@ -105,14 +126,12 @@ public class BowHelper extends Module {
                 if (!(e instanceof PlayerEntity)) continue;
                 if (((PlayerEntity) e).isSpectator()) continue;
             } else {
-                // players + hostiles
                 if (!(e instanceof PlayerEntity) && !(e instanceof HostileEntity)) continue;
                 if (e instanceof PlayerEntity && ((PlayerEntity) e).isSpectator()) continue;
             }
 
             double d = mc.player.squaredDistanceTo(e);
             if (d >= closest) continue;
-
             if (requireLos.get() && !hasLineOfSight(mc, e)) continue;
 
             closest = d;
@@ -121,68 +140,102 @@ public class BowHelper extends Module {
         return best;
     }
 
+    /** Multi-point LOS: head / center / feet — any clear = visible. */
     private boolean hasLineOfSight(MinecraftClient mc, Entity target) {
         Vec3d from = mc.player.getCameraPosVec(1.0f);
-        Vec3d to = target.getBoundingBox().getCenter();
-        HitResult hit = mc.world.raycast(new RaycastContext(
-                from, to,
-                RaycastContext.ShapeType.COLLIDER,
-                RaycastContext.FluidHandling.NONE,
-                mc.player));
-        if (hit.getType() == HitResult.Type.MISS) return true;
-        // Hit something before target — blocked
-        return hit.getPos().squaredDistanceTo(to) < 1.0;
+        double x = target.getX();
+        double z = target.getZ();
+        double[] ys = {
+                target.getY() + target.getHeight() * 0.9, // head
+                target.getY() + target.getHeight() * 0.5, // center
+                target.getY() + target.getHeight() * 0.15 // feet
+        };
+        for (double y : ys) {
+            Vec3d to = new Vec3d(x, y, z);
+            HitResult hit = mc.world.raycast(new RaycastContext(
+                    from, to,
+                    RaycastContext.ShapeType.COLLIDER,
+                    RaycastContext.FluidHandling.NONE,
+                    mc.player));
+            if (hit.getType() == HitResult.Type.MISS) return true;
+            // Hit point near the sample → effectively clear to body
+            if (hit.getPos().squaredDistanceTo(to) < 0.25) return true;
+        }
+        return false;
     }
 
     private void aimAt(MinecraftClient mc, Entity target) {
         double dx = target.getX() - mc.player.getX();
-        double dy = target.getEyeY() - mc.player.getEyeY();
+        double dy = (target.getY() + target.getHeight() * 0.5) - mc.player.getEyeY();
         double dz = target.getZ() - mc.player.getZ();
         double dist = Math.sqrt(dx * dx + dz * dz);
 
+        // Simple gravity-ish compensation: higher arc for longer range
+        // bow projectile gravity ≈ 0.05, velocity ≈ 3 * pull; use mid charge estimate
+        double v = 2.5;
+        double g = 0.05;
+        double pitchRad;
+        if (dist < 0.1) {
+            pitchRad = dy > 0 ? -Math.PI / 2 : Math.PI / 2;
+        } else {
+            // quadratic aim approximation
+            double disc = v * v * v * v - g * (g * dist * dist + 2 * dy * v * v);
+            if (disc < 0) {
+                pitchRad = -Math.atan2(dy, dist);
+            } else {
+                pitchRad = Math.atan((v * v - Math.sqrt(disc)) / (g * dist));
+            }
+        }
+
         float targetYaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
-        float targetPitch = (float) Math.toDegrees(-Math.atan((dy - dist * 0.1) / Math.max(dist, 0.001)));
+        float targetPitch = (float) -Math.toDegrees(pitchRad);
 
         if (softAim.get()) {
             float speed = aimSpeed.getFloat();
-            mc.player.yaw = lerpAngle(mc.player.yaw, targetYaw, speed);
-            mc.player.pitch = mc.player.pitch + (targetPitch - mc.player.pitch) * speed;
+            float maxDelta = 12.0f; // max degrees per tick
+            float yawDiff = wrapDegrees(targetYaw - mc.player.yaw);
+            float pitchDiff = targetPitch - mc.player.pitch;
+            yawDiff = clamp(yawDiff * speed, -maxDelta, maxDelta);
+            pitchDiff = clamp(pitchDiff * speed, -maxDelta, maxDelta);
+            mc.player.yaw += yawDiff;
+            mc.player.pitch = clamp(mc.player.pitch + pitchDiff, -90, 90);
         } else {
             mc.player.yaw = targetYaw;
-            mc.player.pitch = targetPitch;
+            mc.player.pitch = clamp(targetPitch, -90, 90);
         }
     }
 
-    private static float lerpAngle(float from, float to, float t) {
-        float diff = to - from;
-        while (diff < -180) diff += 360;
-        while (diff > 180) diff -= 360;
-        return from + diff * t;
+    private static float wrapDegrees(float deg) {
+        while (deg < -180) deg += 360;
+        while (deg > 180) deg -= 360;
+        return deg;
+    }
+
+    private static float clamp(float v, float min, float max) {
+        return Math.max(min, Math.min(max, v));
     }
 
     private boolean hasArrows(MinecraftClient mc) {
         if (mc.player.abilities.creativeMode) return true;
         ItemStack main = mc.player.getMainHandStack();
-        if (main.getItem() == Items.BOW && main.hasEnchantments()) {
-            // Infinity check via NBT is version-specific; scan inventory for arrows too
-        }
+        if (EnchantmentHelper.getLevel(Enchantments.INFINITY, main) > 0) return true;
         for (int i = 0; i < mc.player.inventory.size(); i++) {
             ItemStack s = mc.player.inventory.getStack(i);
-            if (s.getItem() instanceof ArrowItem) return true;
-            if (s.getItem() == Items.ARROW || s.getItem() == Items.SPECTRAL_ARROW
-                    || s.getItem() == Items.TIPPED_ARROW) return true;
+            if (s.getItem() == Items.ARROW
+                    || s.getItem() == Items.SPECTRAL_ARROW
+                    || s.getItem() == Items.TIPPED_ARROW) {
+                return true;
+            }
         }
-        // Infinity enchantment on bow
-        return net.minecraft.enchantment.EnchantmentHelper.getLevel(
-                net.minecraft.enchantment.Enchantments.INFINITY, main) > 0;
+        return false;
     }
 
-    private void release() {
-        if (!startedUse) return;
+    private void releaseIfOurs() {
+        if (!moduleOwnsUse) return;
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player != null && mc.interactionManager != null && mc.player.isUsingItem()) {
             mc.interactionManager.stopUsingItem(mc.player);
         }
-        startedUse = false;
+        moduleOwnsUse = false;
     }
 }
