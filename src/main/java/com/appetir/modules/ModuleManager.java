@@ -3,6 +3,7 @@ package com.appetir.modules;
 import com.appetir.config.ConfigManager;
 import com.appetir.friends.FriendManager;
 import com.appetir.modules.impl.*;
+import com.appetir.util.BindManager;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -103,7 +104,6 @@ public final class ModuleManager {
                         + (e.getMessage() != null ? e.getMessage() : "(no message)")
                         + " — forceDisable");
                 e.printStackTrace();
-                // Guaranteed OFF even if onDisable throws
                 m.forceDisable();
             }
         }
@@ -114,9 +114,15 @@ public final class ModuleManager {
         boolean changed = false;
         for (Module m : modules) {
             int k = m.getKey();
-            if (k >= 0 && !keyMap.containsKey(k)) {
+            if (k < 0) continue;
+            if (BindManager.isReserved(k)) {
+                m.setKeyRaw(-1);
+                changed = true;
+                continue;
+            }
+            if (!keyMap.containsKey(k)) {
                 keyMap.put(k, m);
-            } else if (k >= 0) {
+            } else {
                 m.setKeyRaw(-1);
                 changed = true;
             }
@@ -129,7 +135,7 @@ public final class ModuleManager {
 
     public void registerKey(Module module, int key) {
         keyMap.entrySet().removeIf(e -> e.getValue() == module);
-        if (key < 0) return;
+        if (key < 0 || BindManager.isReserved(key)) return;
         Module prev = keyMap.put(key, module);
         if (prev != null && prev != module) {
             prev.setKeyRaw(-1);
