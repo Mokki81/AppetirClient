@@ -46,10 +46,6 @@ public abstract class Module {
         setEnabled(!enabled);
     }
 
-    /**
-     * State is set BEFORE callbacks so isEnabled() is correct inside onEnable/onDisable.
-     * On failure: try opposite callback for cleanup, then restore previous state.
-     */
     public final void setEnabled(boolean value) {
         if (this.enabled == value) return;
 
@@ -67,7 +63,6 @@ public abstract class Module {
             NotificationManager.pushModule(name, value);
             markConfigDirty();
         } catch (Exception e) {
-            // Attempt cleanup of partial side effects
             try {
                 if (value) onDisable();
                 else onEnable();
@@ -101,22 +96,16 @@ public abstract class Module {
         }
         if (this.key == key) return;
 
-        if (key >= 0) {
-            ModuleManager mm = ModuleManager.getInstance();
-            if (mm != null) {
-                for (Module m : mm.getModules()) {
-                    if (m != this && m.getKey() == key) {
-                        m.key = -1;
-                    }
-                }
-            }
+        this.key = key;
+
+        ModuleManager mm = ModuleManager.getInstance();
+        if (mm != null) {
+            mm.registerKey(this, key);
         }
 
-        this.key = key;
         markConfigDirty();
     }
 
-    /** Config-load only. Prefer {@link #setKey(int)} elsewhere. */
     public void setKeyRaw(int key) {
         this.key = key < 0 ? -1 : key;
     }

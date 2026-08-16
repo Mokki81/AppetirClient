@@ -5,15 +5,22 @@ import com.appetir.modules.impl.*;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
-public class ModuleManager {
+public final class ModuleManager {
 
-    private static ModuleManager instance;
+    private static volatile ModuleManager instance;
     private final List<Module> modules = new ArrayList<>();
+    /** key code → module (unique binds) */
+    private final Map<Integer, Module> keyMap = new HashMap<>();
 
     public ModuleManager() {
+        if (instance != null) {
+            throw new IllegalStateException("[Appetir] ModuleManager already constructed");
+        }
         instance = this;
         registerAll();
     }
@@ -84,7 +91,6 @@ public class ModuleManager {
     }
 
     public void onTick() {
-        // Flush debounced config once per tick if needed
         ConfigManager cm = ConfigManager.getInstance();
         if (cm != null) cm.flushDirty();
 
@@ -95,20 +101,51 @@ public class ModuleManager {
             } catch (Exception e) {
                 System.err.println("[Appetir] Tick error in " + m.getName()
                         + " (" + e.getClass().getSimpleName() + "): "
-                        + (e.getMessage() != null ? e.getMessage() : "(no message)"));
+                        + (e.getMessage() != null ? e.getMessage() : "(no message)")
+                        + " — disabling module");
                 e.printStackTrace();
+                // Stop spam: auto-disable failing module
+                try {
+                    m.setEnabled(false);
+                } catch (Exception disableEx) {
+                    m.setEnabledRaw(false);
+                }
             }
         }
     }
 
-    /** Toggle at most one module per key (unique binds). */
-    public void onKeyPress(int key) {
+    /** Rebuild key map from current module keys (call after config load / setKey). */
+    public void rebuildKeyMap() {
+        keyMap.clear();
         for (Module m : modules) {
-            if (m.getKey() == key) {
-                m.toggle();
-                return;
+            int k = m.getKey();
+            if (k >= 0 && !keyMap.containsKey(k)) {
+                keyMap.put(k, m);
+            } else if (k >= 0) {
+                // duplicate — clear later module
+                m.setKeyRaw(-1);
             }
         }
+    }
+
+    public void registerKey(Module module, int key) {
+        // remove old ownership
+        keyMap.entrySet().removeIf(e -> e.getValue() == module);
+        if (key < 0) return;
+        Module prev = keyMap.put(key, module);
+        if (prev != null && prev != module) {
+            prev.setKeyRaw(-1);
+        }
+    }
+
+    public void onKeyPress(int key) {
+        Module m = keyMap.get(key);
+        if (m == null) {
+            // fallback scan + rebuild
+            rebuildKeyMap();
+            m = keyMap.get(key);
+        }
+        if (m != null) m.toggle();
     }
 
     public List<Module> getModules() {

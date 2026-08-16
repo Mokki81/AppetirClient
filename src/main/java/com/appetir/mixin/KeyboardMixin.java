@@ -32,38 +32,41 @@ public class KeyboardMixin {
 
         MinecraftClient mc = MinecraftClient.getInstance();
 
-        // Right Shift — ClickGUI
         if (key == GLFW.GLFW_KEY_RIGHT_SHIFT) {
             if (mc.currentScreen instanceof ClickGUI) {
                 mc.setScreen(null);
             } else if (mc.currentScreen == null || mc.currentScreen instanceof AltManagerScreen) {
                 mc.setScreen(new ClickGUI());
             }
+            ci.cancel();
             return;
         }
 
-        // Right Control — Alt Manager (Full mode only)
         if (key == GLFW.GLFW_KEY_RIGHT_CONTROL) {
-            if (ClientMode.isClean()) return;
+            if (ClientMode.isClean()) {
+                ci.cancel();
+                return;
+            }
             if (mc.currentScreen instanceof AltManagerScreen) {
                 mc.setScreen(null);
             } else {
                 mc.setScreen(new AltManagerScreen(mc.currentScreen));
             }
+            ci.cancel();
             return;
         }
 
-        // Right Alt — HUD toggle
         if (key == GLFW.GLFW_KEY_RIGHT_ALT) {
             AppetirClient.hudVisible = !AppetirClient.hudVisible;
             ConfigManager cm = ConfigManager.getInstance();
             if (cm != null) cm.markDirty();
+            ci.cancel();
             return;
         }
 
-        // Insert — toggle Clean / Full client mode
         if (key == GLFW.GLFW_KEY_INSERT) {
             ClientMode.toggle();
+            ci.cancel();
             return;
         }
 

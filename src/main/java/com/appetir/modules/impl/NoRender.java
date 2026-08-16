@@ -31,7 +31,4 @@ public class NoRender extends Module {
     public boolean noTotem() { return isEnabled() && totem.get(); }
     public boolean noBossBar() { return isEnabled() && bossBar.get(); }
     public boolean noScoreboard() { return isEnabled() && scoreboard.get(); }
-
-    // Legacy static access for old mixins
-    public static boolean noFog = true;
 }

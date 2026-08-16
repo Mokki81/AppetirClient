@@ -20,6 +20,8 @@
     "NoFriendDamageMixin",
     "NoPushMixin",
     "NoRenderMixin",
+    "NoRenderHudMixin",
+    "NoRenderBossBarMixin",
     "NoSlowMixin",
     "SpiderMixin",
     "WorldRendererMixin"

@@ -20,25 +20,26 @@ public class MiddleClick extends Module {
         addSetting(action);
     }
 
-    /** Call from mouse mixin when middle button pressed */
     public void onMiddleClick() {
         if (!isEnabled() || action.is("None")) return;
         MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.currentScreen != null) return;
+        if (mc.player == null || mc.world == null) return;
         if (mc.crosshairTarget == null || mc.crosshairTarget.getType() != HitResult.Type.ENTITY) return;
 
         Entity entity = ((EntityHitResult) mc.crosshairTarget).getEntity();
         if (!(entity instanceof PlayerEntity)) return;
 
-        String name = entity.getEntityName();
+        PlayerEntity target = (PlayerEntity) entity;
         FriendManager fm = FriendManager.getInstance();
         if (fm == null) return;
 
-        if (fm.isFriend(name)) {
-            fm.remove(name);
-            NotificationManager.push("Friend", "Removed " + name);
+        if (fm.isFriend(target)) {
+            fm.toggle(target);
+            NotificationManager.push("Friend", "Removed " + target.getEntityName());
         } else {
-            fm.add(name);
-            NotificationManager.push("Friend", "Added " + name);
+            fm.add(target);
+            NotificationManager.push("Friend", "Added " + target.getEntityName());
         }
     }
 }
