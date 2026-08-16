@@ -1,6 +1,7 @@
 package com.appetir.modules;
 
 import com.appetir.config.ConfigManager;
+import com.appetir.friends.FriendManager;
 import com.appetir.modules.impl.*;
 
 import java.util.ArrayList;
@@ -14,7 +15,6 @@ public final class ModuleManager {
 
     private static volatile ModuleManager instance;
     private final List<Module> modules = new ArrayList<>();
-    /** key code → module (unique binds) */
     private final Map<Integer, Module> keyMap = new HashMap<>();
 
     public ModuleManager() {
@@ -26,7 +26,6 @@ public final class ModuleManager {
     }
 
     private void registerAll() {
-        // Combat
         add(new Aura());
         add(new AutoPotion());
         add(new AutoSwap());
@@ -37,7 +36,6 @@ public final class ModuleManager {
         add(new NoFriendDamage());
         add(new TriggerBot());
 
-        // Movement
         add(new AirStuck());
         add(new Fly());
         add(new InvMove());
@@ -47,7 +45,6 @@ public final class ModuleManager {
         add(new Sprint());
         add(new WaterSpeed());
 
-        // Render
         add(new Arrows());
         add(new AspectRatio());
         add(new BlockESP());
@@ -68,7 +65,6 @@ public final class ModuleManager {
         add(new ShulkerViewer());
         add(new WorldParticles());
 
-        // Misc
         add(new AntiAFK());
         add(new AutoAccept());
         add(new AutoEat());
@@ -94,6 +90,9 @@ public final class ModuleManager {
         ConfigManager cm = ConfigManager.getInstance();
         if (cm != null) cm.flushDirty();
 
+        FriendManager fm = FriendManager.getInstance();
+        if (fm != null) fm.flushDirty();
+
         for (Module m : modules) {
             if (!m.isEnabled()) continue;
             try {
@@ -104,7 +103,6 @@ public final class ModuleManager {
                         + (e.getMessage() != null ? e.getMessage() : "(no message)")
                         + " — disabling module");
                 e.printStackTrace();
-                // Stop spam: auto-disable failing module
                 try {
                     m.setEnabled(false);
                 } catch (Exception disableEx) {
@@ -114,7 +112,6 @@ public final class ModuleManager {
         }
     }
 
-    /** Rebuild key map from current module keys (call after config load / setKey). */
     public void rebuildKeyMap() {
         keyMap.clear();
         for (Module m : modules) {
@@ -122,14 +119,12 @@ public final class ModuleManager {
             if (k >= 0 && !keyMap.containsKey(k)) {
                 keyMap.put(k, m);
             } else if (k >= 0) {
-                // duplicate — clear later module
                 m.setKeyRaw(-1);
             }
         }
     }
 
     public void registerKey(Module module, int key) {
-        // remove old ownership
         keyMap.entrySet().removeIf(e -> e.getValue() == module);
         if (key < 0) return;
         Module prev = keyMap.put(key, module);
@@ -141,7 +136,6 @@ public final class ModuleManager {
     public void onKeyPress(int key) {
         Module m = keyMap.get(key);
         if (m == null) {
-            // fallback scan + rebuild
             rebuildKeyMap();
             m = keyMap.get(key);
         }
