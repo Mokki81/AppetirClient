@@ -14,6 +14,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * UUID is the primary identity. Nickname map is secondary and may be ambiguous
+ * under rare name collisions — always prefer UUID for add/remove/toggle of online players.
+ */
 public final class FriendManager {
 
     private static volatile FriendManager instance;
@@ -50,7 +54,7 @@ public final class FriendManager {
         String n = name.trim();
         String key = n.toLowerCase(Locale.ROOT);
         if (byName.containsKey(key)) return false;
-        byName.put(key, null); // legacy
+        byName.put(key, null);
         legacyDisplay.put(key, n);
         markDirty();
         return true;
@@ -66,24 +70,22 @@ public final class FriendManager {
     private void promoteToUuid(String uuid, String name) {
         String nameKey = name.toLowerCase(Locale.ROOT);
 
-        // Clear name→uuid mappings for this uuid
+        // Drop any name keys that pointed at THIS uuid
         byName.entrySet().removeIf(e -> uuid.equals(e.getValue()));
 
-        // If another UUID already owns this nickname, keep UUID check but name points to newest
         String prevOwner = byName.get(nameKey);
         if (prevOwner != null && !prevOwner.equals(uuid)) {
-            // nickname collision: name map → newest uuid; both stay friends by UUID
+            // Collision: both UUIDs remain friends; name index points at newest
             System.err.println("[Appetir] Friend nickname collision: " + name
                     + " was " + prevOwner + ", now " + uuid);
         }
 
-        byName.remove(nameKey);
         legacyDisplay.remove(nameKey);
-
         byUuid.put(uuid, name);
         byName.put(nameKey, uuid);
     }
 
+    /** Remove by display name (legacy or single UUID owner of that name). */
     public boolean remove(String name) {
         if (name == null) return false;
         String key = name.trim().toLowerCase(Locale.ROOT);
@@ -93,12 +95,41 @@ public final class FriendManager {
         legacyDisplay.remove(key);
 
         if (id != null) {
-            byUuid.remove(id);
-            // remove other name keys pointing at same uuid
-            byName.entrySet().removeIf(e -> id.equals(e.getValue()));
+            // Only remove the UUID that currently owns this name index
+            removeUuidInternal(id);
         }
         markDirty();
         return true;
+    }
+
+    /** Remove by player identity (UUID-first). */
+    public boolean remove(PlayerEntity player) {
+        if (player == null) return false;
+        String uuid = player.getUuid().toString();
+        if (byUuid.containsKey(uuid)) {
+            return removeUuid(uuid);
+        }
+        // Legacy name-only entry
+        return remove(player.getGameProfile().getName());
+    }
+
+    public boolean removeUuid(String uuid) {
+        if (uuid == null || !byUuid.containsKey(uuid)) return false;
+        removeUuidInternal(uuid);
+        markDirty();
+        return true;
+    }
+
+    private void removeUuidInternal(String uuid) {
+        String name = byUuid.remove(uuid);
+        // Clear name index only if it still points at this uuid
+        if (name != null) {
+            String key = name.toLowerCase(Locale.ROOT);
+            if (uuid.equals(byName.get(key))) {
+                byName.remove(key);
+            }
+        }
+        byName.entrySet().removeIf(e -> uuid.equals(e.getValue()));
     }
 
     public boolean isFriend(String name) {
@@ -119,7 +150,10 @@ public final class FriendManager {
             String oldName = byUuid.get(uuid);
             if (oldName == null || !oldName.equals(newName)) {
                 if (oldName != null) {
-                    byName.remove(oldName.toLowerCase(Locale.ROOT));
+                    String oldKey = oldName.toLowerCase(Locale.ROOT);
+                    if (uuid.equals(byName.get(oldKey))) {
+                        byName.remove(oldKey);
+                    }
                 }
                 byUuid.put(uuid, newName);
                 byName.put(newName.toLowerCase(Locale.ROOT), uuid);
@@ -146,8 +180,9 @@ public final class FriendManager {
     }
 
     public void toggle(PlayerEntity player) {
+        if (player == null) return;
         if (isFriend(player)) {
-            remove(player.getGameProfile().getName());
+            remove(player); // UUID-first
         } else {
             add(player);
         }
@@ -160,8 +195,7 @@ public final class FriendManager {
         }
         for (Map.Entry<String, String> e : byName.entrySet()) {
             if (e.getValue() == null) {
-                String display = legacyDisplay.getOrDefault(e.getKey(), e.getKey());
-                names.add(display);
+                names.add(legacyDisplay.getOrDefault(e.getKey(), e.getKey()));
             }
         }
         return Collections.unmodifiableSet(names);
@@ -227,10 +261,9 @@ public final class FriendManager {
                 }
             }
             for (Map.Entry<String, String> e : byName.entrySet()) {
-                if (e.getValue() != null) continue; // UUID-backed
+                if (e.getValue() != null) continue;
                 if (writtenName.add(e.getKey())) {
-                    String display = legacyDisplay.getOrDefault(e.getKey(), e.getKey());
-                    w.write(display + "\n");
+                    w.write(legacyDisplay.getOrDefault(e.getKey(), e.getKey()) + "\n");
                 }
             }
         } catch (Exception e) {
