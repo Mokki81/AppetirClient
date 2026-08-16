@@ -8,7 +8,7 @@ import net.minecraft.screen.PlayerScreenHandler;
 import net.minecraft.screen.slot.SlotActionType;
 
 /**
- * State machine: advance only when client inventory reflects expected state.
+ * State-aware totem swap with expected-stack validation and safe abort.
  */
 public class AutoTotem extends Module {
 
@@ -20,6 +20,8 @@ public class AutoTotem extends Module {
     private int containerSlot = -1;
     private int syncId = -1;
     private int timeout = 0;
+    private ItemStack expectedCursor = ItemStack.EMPTY;
+    private ItemStack previousOffhand = ItemStack.EMPTY;
 
     public AutoTotem() {
         super("AutoTotem", "Автоматически кладёт тотем в оффхенд", Category.COMBAT);
@@ -27,28 +29,34 @@ public class AutoTotem extends Module {
 
     @Override
     public void onDisable() {
+        reset();
+    }
+
+    private void reset() {
         phase = Phase.IDLE;
         containerSlot = -1;
         syncId = -1;
         timeout = 0;
+        expectedCursor = ItemStack.EMPTY;
+        previousOffhand = ItemStack.EMPTY;
     }
 
     @Override
     public void onTick() {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.interactionManager == null || mc.world == null) {
-            phase = Phase.IDLE;
+            reset();
             return;
         }
 
         if (!(mc.player.currentScreenHandler instanceof PlayerScreenHandler)
                 || mc.player.currentScreenHandler != mc.player.playerScreenHandler) {
-            phase = Phase.IDLE;
+            reset();
             return;
         }
 
         if (mc.player.getOffHandStack().getItem() == Items.TOTEM_OF_UNDYING) {
-            phase = Phase.IDLE;
+            reset();
             return;
         }
 
@@ -59,47 +67,54 @@ public class AutoTotem extends Module {
                 if (inv < 0) return;
                 containerSlot = inv < 9 ? inv + 36 : inv;
                 syncId = mc.player.playerScreenHandler.syncId;
-                // Verify slot still has totem
                 if (!slotHasTotem(mc, containerSlot)) return;
+
+                previousOffhand = mc.player.getOffHandStack().copy();
+                expectedCursor = mc.player.inventory.getStack(
+                        containerSlot >= 36 ? containerSlot - 36 : containerSlot).copy();
+
                 mc.interactionManager.clickSlot(syncId, containerSlot, 0, SlotActionType.PICKUP, mc.player);
                 phase = Phase.WAIT_PICKUP;
-                timeout = 10;
+                timeout = 12;
                 break;
             }
             case WAIT_PICKUP: {
                 if (!validHandler(mc) || --timeout <= 0) {
-                    abort(mc);
+                    safeAbort(mc);
                     return;
                 }
-                if (cursorIsTotem(mc)) {
+                ItemStack cursor = mc.player.inventory.getCursorStack();
+                if (cursor.getItem() == Items.TOTEM_OF_UNDYING) {
                     mc.interactionManager.clickSlot(syncId, 45, 0, SlotActionType.PICKUP, mc.player);
                     phase = Phase.WAIT_OFFHAND;
-                    timeout = 10;
+                    timeout = 12;
                 }
                 break;
             }
             case WAIT_OFFHAND: {
                 if (!validHandler(mc) || --timeout <= 0) {
-                    abort(mc);
+                    safeAbort(mc);
                     return;
                 }
                 if (mc.player.getOffHandStack().getItem() == Items.TOTEM_OF_UNDYING) {
-                    // Return whatever is on cursor (previous offhand)
-                    if (!mc.player.inventory.getCursorStack().isEmpty()) {
-                        mc.interactionManager.clickSlot(syncId, containerSlot, 0, SlotActionType.PICKUP, mc.player);
-                        phase = Phase.WAIT_RETURN;
-                        timeout = 10;
-                    } else {
+                    ItemStack cursor = mc.player.inventory.getCursorStack();
+                    if (cursor.isEmpty()) {
                         phase = Phase.COOLDOWN;
                         timeout = 3;
+                    } else {
+                        // Only return if source looks empty-ish or can accept
+                        mc.interactionManager.clickSlot(syncId, containerSlot, 0, SlotActionType.PICKUP, mc.player);
+                        phase = Phase.WAIT_RETURN;
+                        timeout = 12;
                     }
                 }
                 break;
             }
             case WAIT_RETURN: {
                 if (!validHandler(mc) || --timeout <= 0) {
-                    // Best effort: try put cursor anywhere safe
-                    abort(mc);
+                    // Don't blind-click further — stop
+                    phase = Phase.COOLDOWN;
+                    timeout = 5;
                     return;
                 }
                 if (mc.player.inventory.getCursorStack().isEmpty()) {
@@ -109,24 +124,43 @@ public class AutoTotem extends Module {
                 break;
             }
             case COOLDOWN: {
-                if (--timeout <= 0) {
-                    phase = Phase.IDLE;
-                    containerSlot = -1;
-                }
+                if (--timeout <= 0) reset();
                 break;
             }
         }
     }
 
-    private void abort(MinecraftClient mc) {
-        // If cursor holds something, try return to source slot once
+    /**
+     * Only click source if cursor still looks like previous offhand and recovery is safe.
+     * Never blind-swap into an occupied/wrong slot.
+     */
+    private void safeAbort(MinecraftClient mc) {
         try {
-            if (validHandler(mc) && !mc.player.inventory.getCursorStack().isEmpty() && containerSlot >= 0) {
+            if (!validHandler(mc)) {
+                reset();
+                return;
+            }
+            ItemStack cursor = mc.player.inventory.getCursorStack();
+            if (cursor.isEmpty()) {
+                phase = Phase.COOLDOWN;
+                timeout = 5;
+                return;
+            }
+            // Safe only if source slot is empty — then put cursor back
+            if (containerSlot >= 0 && isSourceEmpty(mc, containerSlot)) {
                 mc.interactionManager.clickSlot(syncId, containerSlot, 0, SlotActionType.PICKUP, mc.player);
             }
-        } catch (Exception ignored) {}
+            // else: leave cursor — better than wrong swap
+        } catch (Exception ignored) {
+        }
         phase = Phase.COOLDOWN;
         timeout = 5;
+    }
+
+    private boolean isSourceEmpty(MinecraftClient mc, int containerSlot) {
+        int inv = containerSlot >= 36 && containerSlot <= 44 ? containerSlot - 36 : containerSlot;
+        if (inv < 0 || inv >= 36) return false;
+        return mc.player.inventory.getStack(inv).isEmpty();
     }
 
     private boolean validHandler(MinecraftClient mc) {
@@ -136,12 +170,7 @@ public class AutoTotem extends Module {
                 && mc.player.currentScreenHandler.syncId == syncId;
     }
 
-    private boolean cursorIsTotem(MinecraftClient mc) {
-        return mc.player.inventory.getCursorStack().getItem() == Items.TOTEM_OF_UNDYING;
-    }
-
     private boolean slotHasTotem(MinecraftClient mc, int containerSlot) {
-        // Map container slot back to inventory index for read
         int inv = containerSlot >= 36 && containerSlot <= 44 ? containerSlot - 36 : containerSlot;
         if (inv < 0 || inv >= 36) return false;
         return mc.player.inventory.getStack(inv).getItem() == Items.TOTEM_OF_UNDYING;
