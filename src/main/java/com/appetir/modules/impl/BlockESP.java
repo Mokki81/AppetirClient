@@ -15,18 +15,24 @@ public class BlockESP extends Module {
 
     public static final List<BlockPos> interestingBlocks = new ArrayList<>();
 
-    private final NumberSetting range = new NumberSetting("Range", "Scan range", 32, 8, 64, 4);
-    private final NumberSetting interval = new NumberSetting("Interval", "Scan every N ticks", 20, 5, 60, 5);
+    private final NumberSetting range = new NumberSetting("Range", "Horizontal scan range", 24, 8, 48, 4);
+    private final NumberSetting yRange = new NumberSetting("YRange", "Vertical scan range", 16, 4, 32, 2);
+    private final NumberSetting interval = new NumberSetting("Interval", "Scan every N ticks", 40, 10, 100, 5);
     private final BooleanSetting chests = new BooleanSetting("Chests", "Chests / barrels", true);
     private final BooleanSetting spawners = new BooleanSetting("Spawners", "Mob spawners", true);
     private final BooleanSetting shulkers = new BooleanSetting("Shulkers", "Shulker boxes", true);
     private final BooleanSetting portals = new BooleanSetting("Portals", "Nether portals / end portal", false);
 
     private int tickCounter = 0;
+    private int scanX, scanY, scanZ;
+    private boolean scanning;
+    private BlockPos scanCenter;
+    private final List<BlockPos> scanBuffer = new ArrayList<>();
 
     public BlockESP() {
         super("BlockESP", "Подсветка блоков", Category.RENDER);
         addSetting(range);
+        addSetting(yRange);
         addSetting(interval);
         addSetting(chests);
         addSetting(spawners);
@@ -36,33 +42,65 @@ public class BlockESP extends Module {
 
     @Override
     public void onTick() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player == null || mc.world == null) return;
+
+        if (scanning) {
+            continueScan(mc);
+            return;
+        }
+
         if (++tickCounter < interval.getInt()) return;
         tickCounter = 0;
-        scan();
+        startScan(mc);
     }
 
     @Override
     public void onDisable() {
         interestingBlocks.clear();
+        scanBuffer.clear();
+        scanning = false;
     }
 
-    private void scan() {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player == null || mc.world == null) return;
+    private void startScan(MinecraftClient mc) {
+        scanCenter = mc.player.getBlockPos();
+        scanX = -range.getInt();
+        scanY = -yRange.getInt();
+        scanZ = -range.getInt();
+        scanBuffer.clear();
+        scanning = true;
+    }
 
-        interestingBlocks.clear();
-        BlockPos center = mc.player.getBlockPos();
+    /** Incremental: process limited blocks per tick to avoid freezes. */
+    private void continueScan(MinecraftClient mc) {
         int r = range.getInt();
+        int yr = yRange.getInt();
+        int budget = 8000; // blocks per tick
 
-        // scan in steps of 1 — still ok for 32, skip air quickly
-        for (int x = -r; x <= r; x++) {
-            for (int y = -r; y <= r; y++) {
-                for (int z = -r; z <= r; z++) {
-                    BlockPos pos = center.add(x, y, z);
-                    Block block = mc.world.getBlockState(pos).getBlock();
-                    if (isInteresting(block)) {
-                        interestingBlocks.add(pos.toImmutable());
-                    }
+        while (budget-- > 0) {
+            if (scanX > r) {
+                // done
+                interestingBlocks.clear();
+                interestingBlocks.addAll(scanBuffer);
+                scanning = false;
+                return;
+            }
+
+            BlockPos pos = scanCenter.add(scanX, scanY, scanZ);
+            if (mc.world.isChunkLoaded(pos)) {
+                Block block = mc.world.getBlockState(pos).getBlock();
+                if (isInteresting(block)) {
+                    scanBuffer.add(pos.toImmutable());
+                }
+            }
+
+            scanZ++;
+            if (scanZ > r) {
+                scanZ = -r;
+                scanY++;
+                if (scanY > yr) {
+                    scanY = -yr;
+                    scanX++;
                 }
             }
         }

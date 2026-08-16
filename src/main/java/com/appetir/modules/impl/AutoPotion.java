@@ -17,6 +17,7 @@ public class AutoPotion extends Module {
     private final NumberSetting health = new NumberSetting("Health", "Drink below this HP", 10, 2, 20, 0.5);
     private int cooldown = 0;
     private int prevSlot = -1;
+    private int potionSlot = -1;
 
     public AutoPotion() {
         super("AutoPotion", "Пьёт healing/regen при низком HP", Category.COMBAT);
@@ -24,27 +25,31 @@ public class AutoPotion extends Module {
     }
 
     @Override
+    public void onDisable() {
+        restoreSlot();
+    }
+
+    @Override
     public void onTick() {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.world == null || mc.interactionManager == null) return;
+
         if (cooldown > 0) {
             cooldown--;
-            if (cooldown == 0 && prevSlot >= 0) {
-                mc.player.inventory.selectedSlot = prevSlot;
-                prevSlot = -1;
-            }
+            if (cooldown == 0) restoreSlot();
             return;
         }
+
         if (mc.player.getHealth() > health.getFloat()) return;
-        // Already regenerating heavily
         if (mc.player.hasStatusEffect(StatusEffects.REGENERATION)
                 && mc.player.getStatusEffect(StatusEffects.REGENERATION).getAmplifier() >= 1) return;
 
         for (int i = 0; i < 9; i++) {
             ItemStack stack = mc.player.inventory.getStack(i);
-            if (!isHealingPotion(stack)) continue;
+            if (!isDrinkableHealing(stack)) continue;
 
-            prevSlot = mc.player.inventory.selectedSlot;
+            if (prevSlot < 0) prevSlot = mc.player.inventory.selectedSlot;
+            potionSlot = i;
             mc.player.inventory.selectedSlot = i;
             mc.interactionManager.interactItem(mc.player, mc.world, Hand.MAIN_HAND);
             cooldown = 25;
@@ -52,20 +57,34 @@ public class AutoPotion extends Module {
         }
     }
 
-    private boolean isHealingPotion(ItemStack stack) {
+    private void restoreSlot() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player != null && prevSlot >= 0 && potionSlot >= 0
+                && mc.player.inventory.selectedSlot == potionSlot) {
+            mc.player.inventory.selectedSlot = prevSlot;
+        }
+        prevSlot = -1;
+        potionSlot = -1;
+    }
+
+    /** Only drinkable potions — never splash/lingering. */
+    private boolean isDrinkableHealing(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return false;
-        if (stack.getItem() != Items.POTION && stack.getItem() != Items.SPLASH_POTION
-                && stack.getItem() != Items.LINGERING_POTION) return false;
+        if (stack.getItem() != Items.POTION) return false;
 
         List<StatusEffectInstance> effects = PotionUtil.getPotionEffects(stack);
+        boolean healing = false;
         for (StatusEffectInstance e : effects) {
-            if (e.getEffectType() == StatusEffects.INSTANT_HEALTH) return true;
-            if (e.getEffectType() == StatusEffects.REGENERATION) return true;
-            // reject harmful
-            if (e.getEffectType() == StatusEffects.POISON) return false;
-            if (e.getEffectType() == StatusEffects.INSTANT_DAMAGE) return false;
-            if (e.getEffectType() == StatusEffects.WITHER) return false;
+            if (e.getEffectType() == StatusEffects.POISON
+                    || e.getEffectType() == StatusEffects.INSTANT_DAMAGE
+                    || e.getEffectType() == StatusEffects.WITHER) {
+                return false;
+            }
+            if (e.getEffectType() == StatusEffects.INSTANT_HEALTH
+                    || e.getEffectType() == StatusEffects.REGENERATION) {
+                healing = true;
+            }
         }
-        return false;
+        return healing;
     }
 }

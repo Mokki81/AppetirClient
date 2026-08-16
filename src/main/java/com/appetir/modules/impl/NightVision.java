@@ -10,9 +10,26 @@ public class NightVision extends Module {
 
     private final BooleanSetting hideParticles = new BooleanSetting("HideParticles", "No effect particles", true);
 
+    private StatusEffectInstance savedServerEffect;
+    private boolean hadServerEffect;
+
     public NightVision() {
         super("NightVision", "Ночное зрение", Category.RENDER);
         addSetting(hideParticles);
+    }
+
+    @Override
+    public void onEnable() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player == null) return;
+        StatusEffectInstance e = mc.player.getStatusEffect(StatusEffects.NIGHT_VISION);
+        if (e != null) {
+            hadServerEffect = true;
+            savedServerEffect = new StatusEffectInstance(e);
+        } else {
+            hadServerEffect = false;
+            savedServerEffect = null;
+        }
     }
 
     @Override
@@ -29,6 +46,14 @@ public class NightVision extends Module {
     @Override
     public void onDisable() {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player != null) mc.player.removeStatusEffect(StatusEffects.NIGHT_VISION);
+        if (mc.player == null) return;
+
+        mc.player.removeStatusEffect(StatusEffects.NIGHT_VISION);
+
+        if (hadServerEffect && savedServerEffect != null && savedServerEffect.getDuration() > 0) {
+            mc.player.addStatusEffect(new StatusEffectInstance(savedServerEffect));
+        }
+        hadServerEffect = false;
+        savedServerEffect = null;
     }
 }

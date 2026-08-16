@@ -20,27 +20,38 @@ public class NameTagsMixin {
     private void onRender(PlayerEntity player, float yaw, float tickDelta,
                           MatrixStack matrices, VertexConsumerProvider provider, int light, CallbackInfo ci) {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player == null || player == mc.player || !isEnabled()) return;
+        if (mc.player == null || player == mc.player) return;
+
+        NameTags mod = getMod();
+        if (mod == null || !mod.isEnabled()) return;
 
         matrices.push();
         matrices.translate(0, player.getHeight() + 0.5, 0);
         matrices.multiply(mc.gameRenderer.getCamera().getRotation());
-        float scale = 0.025f * NameTags.scale;
+        float scale = 0.025f * mod.getScale();
         matrices.scale(-scale, -scale, scale);
 
-        String name  = player.getGameProfile().getName();
-        String hp    = NameTags.showHealth ? String.format(" §c%.0f❤", player.getHealth()) : "";
-        String dist  = NameTags.showDistance ? String.format(" §7%.0fm", mc.player.distanceTo(player)) : "";
-        String tag   = name + hp + dist;
+        String name = player.getGameProfile().getName();
+        String hp = mod.showHealth() ? String.format(" §c%.0f❤", player.getHealth()) : "";
+        String dist = mod.showDistance() ? String.format(" §7%.0fm", mc.player.distanceTo(player)) : "";
+        String arm = "";
+        if (mod.showArmor()) {
+            int armor = player.getArmor();
+            arm = String.format(" §b%d⛨", armor);
+        }
+        String tag = name + hp + arm + dist;
 
         int tw = mc.textRenderer.getWidth(tag);
-        mc.textRenderer.drawWithShadow(matrices, tag, -tw/2f, -4, 0xFFFFFFFF);
+        mc.textRenderer.drawWithShadow(matrices, tag, -tw / 2f, -4, 0xFFFFFFFF);
         matrices.pop();
     }
 
-    private boolean isEnabled() {
+    private NameTags getMod() {
         ModuleManager mm = ModuleManager.getInstance();
-        if (mm==null) return false;
-        return mm.getModules().stream().filter(m->m instanceof NameTags).anyMatch(m->m.isEnabled());
+        if (mm == null) return null;
+        for (var m : mm.getModules()) {
+            if (m instanceof NameTags) return (NameTags) m;
+        }
+        return null;
     }
 }

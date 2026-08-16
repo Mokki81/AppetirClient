@@ -11,10 +11,31 @@ public class Speed extends Module {
     private final ModeSetting mode = new ModeSetting("Mode", "Speed mode", "Strafe", "Strafe", "Vanilla", "BHop");
     private final NumberSetting speed = new NumberSetting("Speed", "Movement multiplier", 1.2, 1.0, 3.0, 0.05);
 
+    private float savedWalkSpeed = 0.1f;
+    private boolean stateSaved;
+
     public Speed() {
         super("Speed", "Увеличивает скорость передвижения", Category.MOVEMENT);
         addSetting(mode);
         addSetting(speed);
+    }
+
+    @Override
+    public void onEnable() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player != null) {
+            savedWalkSpeed = mc.player.abilities.getWalkSpeed();
+            stateSaved = true;
+        }
+    }
+
+    @Override
+    public void onDisable() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player != null && stateSaved) {
+            mc.player.abilities.setWalkSpeed(savedWalkSpeed);
+        }
+        stateSaved = false;
     }
 
     @Override
@@ -27,7 +48,7 @@ public class Speed extends Module {
         String m = mode.get();
 
         if (m.equals("Vanilla")) {
-            mc.player.abilities.setWalkSpeed((float) (0.1f * s));
+            mc.player.abilities.setWalkSpeed((float) (savedWalkSpeed * s));
             return;
         }
 
@@ -35,7 +56,6 @@ public class Speed extends Module {
             mc.player.jump();
         }
 
-        // Strafe / BHop boost
         Vec3d v = mc.player.getVelocity();
         float yaw = mc.player.yaw * 0.017453292f;
         double forward = mc.player.input.movementForward;
@@ -54,14 +74,6 @@ public class Speed extends Module {
         double mz = forward * s * 0.28 * Math.cos(yaw) + strafe * s * 0.28 * Math.sin(yaw);
 
         mc.player.setVelocity(mx, v.y, mz);
-    }
-
-    @Override
-    public void onDisable() {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player != null) {
-            mc.player.abilities.setWalkSpeed(0.1f);
-        }
     }
 
     private boolean isMoving(MinecraftClient mc) {

@@ -19,16 +19,23 @@ public class Sprint extends Module {
     public void onTick() {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null) return;
-        if (mc.player.isSneaking() || mc.player.isTouchingWater() || mc.player.isSubmergedInWater()) return;
+        if (mc.player.isSneaking() || mc.player.isTouchingWater() || mc.player.isSubmergedInWater()) {
+            return;
+        }
 
         boolean moving = omni.get()
                 ? (mc.player.input.movementForward != 0 || mc.player.input.movementSideways != 0)
                 : mc.player.input.movementForward > 0;
 
-        if (moving) {
-            if (keep.get() || !mc.player.isUsingItem()) {
-                mc.player.setSprinting(true);
-            }
+        if (!moving) {
+            return;
+        }
+
+        if (keep.get() || !mc.player.isUsingItem()) {
+            mc.player.setSprinting(true);
+        } else {
+            // Keep=false and using item → force stop sprint
+            mc.player.setSprinting(false);
         }
     }
 }
