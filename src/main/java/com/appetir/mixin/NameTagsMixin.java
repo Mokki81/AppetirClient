@@ -1,5 +1,6 @@
 package com.appetir.mixin;
 
+import com.appetir.modules.Module;
 import com.appetir.modules.ModuleManager;
 import com.appetir.modules.impl.NameTags;
 import net.minecraft.client.MinecraftClient;
@@ -9,7 +10,6 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.text.LiteralText;
 import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -55,7 +55,7 @@ public class NameTagsMixin {
     private NameTags getMod() {
         ModuleManager mm = ModuleManager.getInstance();
         if (mm == null) return null;
-        for (var m : mm.getModules()) {
+        for (Module m : mm.getModules()) {
             if (m instanceof NameTags) return (NameTags) m;
         }
         return null;

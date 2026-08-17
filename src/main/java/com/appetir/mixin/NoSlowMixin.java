@@ -1,5 +1,6 @@
 package com.appetir.mixin;
 
+import com.appetir.modules.Module;
 import com.appetir.modules.ModuleManager;
 import com.appetir.modules.impl.NoSlow;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -7,10 +8,6 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.ModifyConstant;
 
-/**
- * Replace vanilla item-use slowdown constant (0.2) with 1.0 when NoSlow Items is on.
- * Applied at the actual multiply site — before movement uses the input.
- */
 @Mixin(ClientPlayerEntity.class)
 public class NoSlowMixin {
 
@@ -23,7 +20,7 @@ public class NoSlowMixin {
     private boolean isNoSlowItems() {
         ModuleManager mm = ModuleManager.getInstance();
         if (mm == null) return false;
-        for (var m : mm.getModules()) {
+        for (Module m : mm.getModules()) {
             if (m instanceof NoSlow && m.isEnabled()) {
                 return ((NoSlow) m).items();
             }

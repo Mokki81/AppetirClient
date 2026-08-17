@@ -1,5 +1,6 @@
 package com.appetir.mixin;
 
+import com.appetir.modules.Module;
 import com.appetir.modules.ModuleManager;
 import com.appetir.modules.impl.NoRender;
 import net.minecraft.client.gui.hud.BossBarHud;
@@ -16,7 +17,7 @@ public class NoRenderBossBarMixin {
     private void cancelBossBar(MatrixStack matrices, CallbackInfo ci) {
         ModuleManager mm = ModuleManager.getInstance();
         if (mm == null) return;
-        for (var m : mm.getModules()) {
+        for (Module m : mm.getModules()) {
             if (m instanceof NoRender && ((NoRender) m).noBossBar()) {
                 ci.cancel();
                 return;

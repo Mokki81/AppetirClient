@@ -1,5 +1,6 @@
 package com.appetir.mixin;
 
+import com.appetir.modules.Module;
 import com.appetir.modules.ModuleManager;
 import com.appetir.modules.impl.NoPush;
 import net.minecraft.client.MinecraftClient;
@@ -10,9 +11,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Cancel push only from other players (not boats/mobs/minecarts).
- */
 @Mixin(Entity.class)
 public class NoPushMixin {
 
@@ -25,7 +23,7 @@ public class NoPushMixin {
 
         ModuleManager mm = ModuleManager.getInstance();
         if (mm == null) return;
-        for (var m : mm.getModules()) {
+        for (Module m : mm.getModules()) {
             if (m instanceof NoPush && m.isEnabled()) {
                 ci.cancel();
                 return;

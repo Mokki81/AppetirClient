@@ -1,5 +1,6 @@
 package com.appetir.mixin;
 
+import com.appetir.modules.Module;
 import com.appetir.modules.ModuleManager;
 import com.appetir.modules.impl.NoRender;
 import net.minecraft.client.MinecraftClient;
@@ -10,9 +11,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Fire overlay consumer for NoRender.Fire (1.16.5 Yarn: InGameOverlayRenderer).
- */
 @Mixin(InGameOverlayRenderer.class)
 public class NoRenderOverlayMixin {
 
@@ -25,7 +23,7 @@ public class NoRenderOverlayMixin {
     private static NoRender getMod() {
         ModuleManager mm = ModuleManager.getInstance();
         if (mm == null) return null;
-        for (var m : mm.getModules()) {
+        for (Module m : mm.getModules()) {
             if (m instanceof NoRender) return (NoRender) m;
         }
         return null;

@@ -1,5 +1,6 @@
 package com.appetir.mixin;
 
+import com.appetir.modules.Module;
 import com.appetir.modules.ModuleManager;
 import com.appetir.modules.impl.CustomHand;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -48,7 +49,7 @@ public class CustomHandMixin {
     private boolean isEnabled() {
         ModuleManager mm = ModuleManager.getInstance();
         if (mm == null) return false;
-        for (var m : mm.getModules()) {
+        for (Module m : mm.getModules()) {
             if (m instanceof CustomHand && m.isEnabled()) return true;
         }
         return false;

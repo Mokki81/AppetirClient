@@ -2,6 +2,7 @@ package com.appetir.mixin;
 
 import com.appetir.gui.AltManagerScreen;
 import com.appetir.gui.ClickGUI;
+import com.appetir.modules.Module;
 import com.appetir.modules.ModuleManager;
 import com.appetir.modules.impl.InvMove;
 import net.minecraft.client.MinecraftClient;
@@ -44,7 +45,6 @@ public class InvMoveMixin {
         self.movementSideways = x;
     }
 
-    /** Inventory / container only — not chat, ClickGUI, death, etc. */
     private static boolean isInventoryLike(Screen screen) {
         if (screen instanceof ChatScreen) return false;
         if (screen instanceof ClickGUI) return false;
@@ -55,7 +55,7 @@ public class InvMoveMixin {
     private InvMove getMod() {
         ModuleManager mm = ModuleManager.getInstance();
         if (mm == null) return null;
-        for (var m : mm.getModules()) {
+        for (Module m : mm.getModules()) {
             if (m instanceof InvMove) return (InvMove) m;
         }
         return null;

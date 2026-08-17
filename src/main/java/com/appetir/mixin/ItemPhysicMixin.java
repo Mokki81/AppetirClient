@@ -1,5 +1,6 @@
 package com.appetir.mixin;
 
+import com.appetir.modules.Module;
 import com.appetir.modules.ModuleManager;
 import com.appetir.modules.impl.ItemPhysic;
 import net.minecraft.client.render.VertexConsumerProvider;
@@ -15,10 +16,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * push/pop around transforms so matrix state never leaks to the next entity.
- * Ground detection prefers isOnGround() — velocity-only heuristic removed.
- */
 @Mixin(ItemEntityRenderer.class)
 public class ItemPhysicMixin {
 
@@ -38,7 +35,7 @@ public class ItemPhysicMixin {
         boolean onGround = entity.isOnGround();
 
         if (onGround) {
-            if (mod.onlyFalling()) return; // leave vanilla pose
+            if (mod.onlyFalling()) return;
             matrices.push();
             appetir$pushed = true;
             matrices.translate(0, -0.05, 0);
@@ -73,7 +70,7 @@ public class ItemPhysicMixin {
     private ItemPhysic getMod() {
         ModuleManager mm = ModuleManager.getInstance();
         if (mm == null) return null;
-        for (var m : mm.getModules()) {
+        for (Module m : mm.getModules()) {
             if (m instanceof ItemPhysic) return (ItemPhysic) m;
         }
         return null;

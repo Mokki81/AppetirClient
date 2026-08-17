@@ -1,6 +1,7 @@
 package com.appetir.mixin;
 
 import com.appetir.friends.FriendManager;
+import com.appetir.modules.Module;
 import com.appetir.modules.ModuleManager;
 import com.appetir.modules.impl.NoFriendDamage;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
@@ -20,7 +21,7 @@ public class NoFriendDamageMixin {
         if (mm == null) return;
 
         NoFriendDamage mod = null;
-        for (var m : mm.getModules()) {
+        for (Module m : mm.getModules()) {
             if (m instanceof NoFriendDamage) {
                 mod = (NoFriendDamage) m;
                 break;
