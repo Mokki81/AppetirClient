@@ -1,5 +1,6 @@
 package com.appetir.mixin;
 
+import com.appetir.modules.Module;
 import com.appetir.modules.ModuleManager;
 import com.appetir.modules.impl.MiddleClick;
 import com.appetir.util.BindManager;
@@ -35,7 +36,7 @@ public class MouseMixin {
         if (button == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
             ModuleManager mm = ModuleManager.getInstance();
             if (mm == null) return;
-            for (var m : mm.getModules()) {
+            for (Module m : mm.getModules()) {
                 if (m instanceof MiddleClick && m.isEnabled()) {
                     ((MiddleClick) m).onMiddleClick();
                     break;

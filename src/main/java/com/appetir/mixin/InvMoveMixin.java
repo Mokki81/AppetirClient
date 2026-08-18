@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class InvMoveMixin {
 
     @Inject(method = "tick", at = @At("TAIL"))
-    private void onTick(boolean slowDown, float f, CallbackInfo ci) {
+    private void onTick(boolean slowDown, CallbackInfo ci) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.currentScreen == null) return;
 
